@@ -1,0 +1,66 @@
+{
+  "reference_system": {
+    "dimensions": {
+      "width_mm": 100,
+      "height_mm": 100
+    },
+    "max_coordinates": {
+      "x": 100,
+      "y": 100
+    },
+    "min_coordinates": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "camera_settings": {
+    "fov_h_deg": 62.2,
+    "fov_v_deg": 48.8,
+    "height_mm": 250,
+    "photo_config": {
+      "size": [3280, 2464],
+      "format": "RGB888"
+    },
+    "video_config": {
+      "size": [640, 480],
+      "format": "RGB888",
+      "frame_rate": 41
+    }
+  },
+  "first_module": {
+    "kernel_size": 71,
+    "sigma": 0,
+    "low_threshold": 100,
+    "high_threshold": 200,
+    "border_size": 40
+  },
+  "second_module": {
+    "camera_positioning_margin": 10
+  },
+  "paper": {
+    "dimensions": {
+      "width_mm": 210,
+      "height_mm": 297
+    },
+    "margin": 25
+  },
+  "third_module": {
+    "tesseract_path": [
+      "C:\\",
+      "Program Files",
+      "Tesseract-OCR",
+      "tesseract.exe"
+    ],
+    "config": "--oem 3 --psm 3 -l spa"
+  },
+  "braille_to_coordinates": {
+    "a": 2.5,
+    "b": 2.5,
+    "c": 6.0,
+    "d": 10.0,
+    "e": 1.5,
+    "f": 0.5,
+    "s": 1.0
+  }
+     
+}
