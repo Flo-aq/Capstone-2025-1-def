@@ -1,4 +1,4 @@
-#include <Wire.h>
+
 #include <VL53L0X.h>
 ////////////////////////////////////////////////////////////////
 #define XSHUT_SENSOR_X A0
@@ -267,7 +267,7 @@ void moveMM(int stepPin, int dirPin, float distance, bool isXaxis) {
    }
    
   if (adjustedDistance == 0) {
-    return
+    return;
   }
 
   digitalWrite(EN_PIN, LOW);
@@ -320,7 +320,7 @@ void moveMM(int stepPin, int dirPin, float distance, bool isXaxis) {
   }
 
   Serial.print("OK: ");
-  Serial.print(actualMovedDistance);
+  Serial.println(actualMovedDistance);
   stopMotors();
 }
 
@@ -339,4 +339,3 @@ float calculateMovedDistance(unsigned long steps, bool moveDirection) {
   float distance = (float)steps / STEPS_PER_MM;
   return moveDirection ? distance : -distance;
 }
-

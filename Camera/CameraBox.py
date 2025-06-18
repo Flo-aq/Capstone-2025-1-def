@@ -48,6 +48,17 @@ class CameraBox:
     @y.setter
     def y(self, value):
         self._y = min(max(value, self._y_min_mm), self._y_max_mm)
+    
+    def set_position(self, x_position, y_position):
+        """
+        Set the position of the camera box within the defined boundaries.
+        
+        Args:
+            x_position (float): X position in mm
+            y_position (float): Y position in mm
+        """
+        self.x = x_position
+        self.y = y_position
 
     def get_fov_corners(self):
         """

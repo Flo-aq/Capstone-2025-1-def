@@ -26,8 +26,11 @@ class Arduino():
         while attempts < max_attempts:
             try:
                 self.serial = serial.Serial(
-                    self.port, self.baudrate, timeout=5)
-                time.sleep(2)
+                    self.port, self.baudrate, timeout=2)
+                if attempts == 0:
+                    time.sleep(2) 
+                else:
+                    time.sleep(0.5)
                 self.connected = True
                 return True
 
@@ -58,8 +61,11 @@ class ArduinoMegaScanner(Arduino):
         if not self.is_connected():
             return "E: Arduino Uno not connected"
         try:
+            self.serial.reset_input_buffer()
+
             if not command.endswith('\n'):
                 command += '\n'
+
             self.serial.write(command.encode('utf-8'))
 
             start_time = time.time()
@@ -68,21 +74,24 @@ class ArduinoMegaScanner(Arduino):
             if self.serial.in_waiting > 0:
                 self.serial.reset_input_buffer()
 
-            while time.time() - start_time < 20:
+            while time.time() - start_time < 5:
                 if self.serial.in_waiting > 0:
                     line = self.serial.readline().decode('utf-8').strip()
+                    print(line)
                     if line:
                         response_lines.append(line)
-                        if line == "COMMAND EXECUTED":
+                        if line == "COMMAND EXECUTED" or line.startswith("OK"):
                             break
                 else:
-                    time.sleep(0.05)
+                    time.sleep(0.01)
 
-            if not response_lines or len(response_lines) == 1:
+            if not response_lines:
                 return "E"
 
-            if len(response_lines) > 1:
-                return "\n".join(response_lines[:-1])
+            if len(response_lines) == 1:
+                return response_lines[0]
+            else:
+                return "\n".join(response_lines)
               
             return "\n".join(response_lines)  # Return the last line as the response
 
