@@ -1,7 +1,7 @@
 import serial
 from serial.tools import list_ports
 import time
-from Controllers.Arduino import ArduinoMegaPrinter, ArduinoMegaScanner
+from .Arduino import ArduinoMegaPrinter, ArduinoMegaScanner
 
 
 class DeviceManager:
@@ -15,7 +15,6 @@ class DeviceManager:
         self.ports_info = {}
         self.devices_ports = {"arduino_mega_printer": [],
                               "arduino_mega_scanner": [],
-                              "keyboard": [], 
                               "unknown": []}
         
         self.arduino_mega_printer = None
@@ -29,39 +28,33 @@ class DeviceManager:
 
         if not available_ports:
             print("E: No devices found.")
-            return self.devices_ports
+            return []
 
         identifiers = {
-            "arduino_mega": ["arduino mega", "mega", "2560", "atmega2560", "mks"],
-            "keyboard": ["keyboard", "teclado", "hid", "input device"]
+            "arduino_mega": ["arduino mega", "mega", "2560", "atmega2560"]
         }
 
-        arduino_ports = []
-
+        ports = []
         for port in available_ports:
             device_type = "unknown"
             desc = port.description.lower() if port.description else ""
             hwid = port.hwid.lower() if port.hwid else ""
-            
+            product = port.product.lower() if port.product else ""
+
             self.ports_info[port.device] = {
                 "description": desc,
                 "hwid": hwid,
-                "type": device_type
+                "type": device_type,
+                "product": product
             }
             
-            if any(id_str in desc or id_str in hwid for id_str in identifiers["arduino_mega"]):
-                arduino_ports.append(port.device)
-            elif any(id_str in desc or id_str in hwid for id_str in identifiers["keyboard"]):
-                device_type = "keyboard"
-                self.ports_info[port.device]["type"] = "keyboard"
-                self.devices_ports["keyboard"].append(port.device)
-            else:
-                self.devices_ports["unknown"].append(port.device)
-        return arduino_ports
+            ports.append(port.device)
+
+        return ports
     
     def identify_and_categorize_arduinos(self):
-        arduino_ports = self.detect_arduinos_and_devices()
-        for port in arduino_ports:
+        ports = self.detect_arduinos_and_devices()
+        for port in ports:
             arduino_type = self.identify_arduino(port)
             if arduino_type == "printer":
                 self.devices_ports["arduino_mega_printer"].append(port)
@@ -81,7 +74,6 @@ class DeviceManager:
                 time.sleep(0.5)
                 for i in range(4):
                     line = ser.readline().decode('utf-8').strip()
-                    print(f"Line read: {line}")
                     if "ok" in line.lower():
                         return "printer"
                     if "e: cnf" in line.lower():
@@ -116,3 +108,21 @@ class DeviceManager:
           if not self.arduino_mega_scanner.is_connected():
               print("E: Failed to connect to Arduino Mega Scanner")
               self.arduino_mega_scanner = None
+
+
+# system = DeviceManager()
+# print("\n--- Arduino Mega Scanner ---")
+# print(f"Detected: {system.arduino_mega_scanner is not None}")
+# if system.arduino_mega_scanner:
+#     print(f"Port: {system.get_device_port('arduino_mega_scanner')}")
+#     print(f"Connected: {system.arduino_mega_scanner.is_connected()}")
+
+# print("\n--- Arduino Mega Printer ---")
+# print(f"Detected: {system.arduino_mega_printer is not None}")
+# if system.arduino_mega_printer:
+#     print(f"Port: {system.get_device_port('arduino_mega_printer')}")
+#     print(f"Connected: {system.arduino_mega_printer.is_connected()}")
+
+# print("\n--- Other Devices ---")
+# for port in system.devices_ports["unknown"]:
+#     print(f"Port: {port}, Info: {system.ports_info[port]}")

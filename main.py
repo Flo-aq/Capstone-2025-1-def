@@ -17,6 +17,13 @@ class Main:
         self.reference_system = ReferenceSystem(self.config)
 
         self.camera_box = CameraBox(0, 0, self.camera, self.reference_system)
+
+        self.top_left_img = None
+        self.bottom_right_img = None
+
+        self.paper = None
+        
+        self.imgs = []
     
     def move_axis_arduino(self, axis, distance_mm):
         if not self.device_manager.arduino_mega_scanner:
@@ -34,10 +41,10 @@ class Main:
             response_lines = response.split("\n")
             for line in response_lines:
               if line.startswith("E"):
-                print(f"Error moving camera box: {line.split(" ")[1]}")
+                print(f"Error moving camera box: {line.split(' ')[1]}")
                 return None
               elif line.startswith("OK"):
-                distance_mm = float(line.split(" ")[1])
+                distance_mm = float(line.split(' ')[1])
                 if axis == 0:
                     self.camera_box.move_distance(0, distance_mm)
                 else:
@@ -63,7 +70,6 @@ class Main:
         else:
             print(f"E: Invalid corner name '{corner_name}'")
       
-        
     def capture_image(self):
         image = self.camera.capture_image()
         return image
@@ -104,4 +110,19 @@ class Main:
             print(f"E: Error capturing image for corner {corner}: {str(e)}")
             corner_imgs[corner] = None
         return corner_imgs
-        
+
+    def first_phase(self):
+        if not self.homing(set_custom_origin=True):
+            print("E: Initial homing failed. Exiting first phase.")
+            return False
+
+        img_1 = self.capture_image()
+
+        if img_1 is None:
+            print("E: Failed to capture image in first phase.")
+            return False
+
+        self.move_to_corner("bottom-right")
+
+        img_2 = self.capture_image()
+
