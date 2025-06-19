@@ -85,30 +85,30 @@ import time
       
 #       return successful_captures == len(corners)
 
-# def start_video_feed():
-#     try:
-#       camera = Picamera2()
+def start_video_feed():
+    try:
+      camera = Picamera2()
       
-#       camera_config = camera.create_preview_configuration("size": (1640, 1232), "format": "RGB888")
-#       camera.configure(camera_config)
-#       camera.start()
+      camera_config = camera.create_preview_configuration(main={"size": (1640, 1232), "format": "RGB888"})
+      camera.configure(camera_config)
+      camera.start()
       
-#       time.sleep(1)
+      time.sleep(1)
       
-#       while True:
-#           frame = camera.capture_array()
-#           cv2.imshow("Video Feed", frame)
+      while True:
+          frame = camera.capture_array()
+          cv2.imshow("Video Feed", frame)
           
-#           if cv2.waitKey(1) != -1:
-#                 break
-#     except Exception as e:
-#         print(f"Error: {str(e)}")
+          if cv2.waitKey(1) != -1:
+                break
+    except Exception as e:
+        print(f"Error: {str(e)}")
     
-#     finally:
-#         if 'camera' in locals():
-#             camera.stop()
-#             camera.close()
-#         cv2.destroyAllWindows()
+    finally:
+        if 'camera' in locals():
+            camera.stop()
+            camera.close()
+        cv2.destroyAllWindows()
       
 
 def test_position_commands():
@@ -135,14 +135,6 @@ def test_position_commands():
         return False
     
     print("✓ Homing inicial completado exitosamente\n")
-    
-    try:
-        pos_x = system.device_manager.arduino_mega_scanner.get_position_x()
-        pos_y = system.device_manager.arduino_mega_scanner.get_position_y()
-        print(f"  Posición inicial: {pos_x}, {pos_y}")
-    except Exception as e:
-        print(f"  ERROR al obtener posición inicial: {str(e)}")
-        return False
     
     movements = [
         ("X", 30),
@@ -178,24 +170,6 @@ def test_position_commands():
     #     pos_y = system.device_manager.arduino_mega_scanner.get_position_y()
     #     print(f"  Posición leída: X:{pos_x}, Y:{pos_y}")
         
-    #     # Serie de movimientos pequeños
-    #     small_movements = [
-    #         ("X", 5),  # +5 en X
-    #         ("Y", 5),  # +5 en Y
-    #         ("X", -3), # -3 en X
-    #         ("Y", -3)  # -3 en Y
-    #     ]
-        
-    #     for axis, distance in small_movements:
-    #         print(f"  Movimiento fino {axis} {distance}mm...")
-    #         system.device_manager.arduino_mega_scanner.move_without_PID(axis, distance)
-    #         time.sleep(0.5)
-            
-    #         # Leer posición después del movimiento
-    #         pos_x = system.device_manager.arduino_mega_scanner.get_position_x()
-    #         pos_y = system.device_manager.arduino_mega_scanner.get_position_y()
-    #         print(f"  → Posición: X:{pos_x}, Y:{pos_y}")
-    
     # except Exception as e:
     #     print(f"  ERROR en secuencia de movimientos precisos: {str(e)}")
     

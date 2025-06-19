@@ -31,6 +31,8 @@ class Camera:
         self.fov_h_px, self.fov_v_px = self.photo_h_res, self.photo_v_res
         self.mm_per_px_h, self.mm_per_px_v = self.photo_mm_per_px_h, self.photo_mm_per_px_v
 
+        self.captured_imgs = []
+        
     def calculate_fov(self):
         """
         Calculate field of view dimensions in mm.
@@ -73,5 +75,8 @@ class Camera:
         if self.camera is None:
             self.initialize_camera()
         img = self.camera.capture_array()
+        self.captured_imgs.append(img)
         self.release_camera()
         return img
+    
+    
