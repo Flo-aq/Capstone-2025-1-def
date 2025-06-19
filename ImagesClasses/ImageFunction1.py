@@ -8,6 +8,9 @@ from Functions.FirstModuleFunctions import (
     approximate_polygon,
     is_border_line
 )
+import cv2
+import matplotlib.pyplot as plt
+
 
 class ImageFunction1(Image):
     """
@@ -46,7 +49,8 @@ class ImageFunction1(Image):
         5. Find largest edge contour
         6. Approximate polygon from largest edge
         """
-        
+        original_img = self.image.copy()
+
         binary = first_module_process_image(
             self.image, self.parameters["kernel_size"], self.parameters["sigma"])
         binary_with_border = add_border(binary, self.parameters["border_size"])
@@ -60,6 +64,32 @@ class ImageFunction1(Image):
             print("Polygon detected")
             self.polygon = approximate_polygon(largest_edge)
             self.has_paper = True
+            vis_img = original_img.copy()
+        
+            # Draw the largest edge in red
+            cv2.drawContours(vis_img, [largest_edge], -1, (0, 0, 255), 2)
+            
+            # If polygon was approximated, draw it in green
+            if self.polygon is not None and len(self.polygon) > 0:
+                cv2.drawContours(vis_img, [self.polygon], -1, (0, 255, 0), 2)
+            
+            # Show the image with matplotlib for better display
+            plt.figure(figsize=(12, 8))
+            
+            # Display original image with contours
+            plt.subplot(1, 2, 1)
+            plt.imshow(cv2.cvtColor(vis_img, cv2.COLOR_BGR2RGB))
+            plt.title("Original Image with Largest Edge (red) and Polygon (green)")
+            plt.axis('off')
+            
+            # Display the edge detection result
+            plt.subplot(1, 2, 2)
+            plt.imshow(edges_final, cmap='gray')
+            plt.title("Edge Detection Result")
+            plt.axis('off')
+            
+            plt.tight_layout()
+            plt.show()
         else:
             self.polygon = []
 

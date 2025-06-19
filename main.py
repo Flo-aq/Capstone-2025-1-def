@@ -1,9 +1,15 @@
 from Controllers.DeviceManager import DeviceManager
 from Camera.Camera import Camera
 from Camera.CameraBox import CameraBox
+from ImagesClasses.ImageFunction1 import ImageFunction1
+from ImagesClasses.ImageFunction3 import ImageFunction3
+from Paper import Paper
 from ReferenceSystem import ReferenceSystem
 from Functions.AuxFunctions import load_json
 from os.path import join
+import os
+import cv2
+from datetime import datetime
 
 
 class Main:
@@ -24,6 +30,8 @@ class Main:
         self.paper = None
         
         self.imgs = []
+
+
     
     def move_axis_arduino(self, axis, distance_mm):
         if not self.device_manager.arduino_mega_scanner:
@@ -97,6 +105,10 @@ class Main:
             print("E: Arduino Mega Scanner not connected")
             return None
         
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_dir = f"captured_corners_{timestamp}"
+        os.makedirs(save_dir, exist_ok=True)
+
         corners = ["top-left", "top-right", "bottom-right", "bottom-left"]
         
         corner_imgs = {}
@@ -105,10 +117,20 @@ class Main:
           try:
             coords = self.camera_box.get_specific_corner_coordinates(corner)
             self.move_to_position(coords[0], coords[1]) 
-            corner_imgs[corner] = self.capture_image()
+            img = self.capture_image()
+
+            if img is not None:
+                # Guardar imagen
+                img_path = os.path.join(save_dir, f"{corner}.jpg")
+                cv2.imwrite(img_path, img)
+                corner_imgs[corner] = img
+            else:
+                corner_imgs[corner] = None
+
           except Exception as e:
             print(f"E: Error capturing image for corner {corner}: {str(e)}")
             corner_imgs[corner] = None
+
         return corner_imgs
 
     def first_phase(self):
@@ -116,13 +138,31 @@ class Main:
             print("E: Initial homing failed. Exiting first phase.")
             return False
 
-        img_1 = self.capture_image()
+        self.top_left_img = ImageFunction1(image=None, camera=self.camera, parameters=self.config)
+        self.top_left_img.capture_and_process()
 
-        if img_1 is None:
-            print("E: Failed to capture image in first phase.")
+        if self.top_left_img.image is None:
+            print("E: Failed to capture top left image.")
             return False
 
         self.move_to_corner("bottom-right")
 
-        img_2 = self.capture_image()
+        self.bottom_right_img = ImageFunction1(image=None,camera=self.camera,parameters=self.config)
+        self.bottom_right_img.capture_and_process()
 
+        if self.bottom_right_img.image is None:
+            print("E: Failed to capure bottom right image")
+        
+        self.paper = Paper(self.config, self.camera, self.translator)
+        self.paper.set_position(self.top_left_img, self.bottom_right_img)
+
+        for i, pos in enumerate(self.paper.capture_positions):
+            print(f"Moving camera to capture position {pos}...")
+            print(f"Capturing image {i + 1}...")
+            self.move_to_position(pos[0], pos[1])
+            img = ImageFunction3(
+                image=None,
+                camera=self.camera
+            )
+            img.capture_and_process()
+            self.imgs.append(img)
