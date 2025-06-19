@@ -77,7 +77,6 @@ class ArduinoMegaScanner(Arduino):
             while time.time() - start_time < 5:
                 if self.serial.in_waiting > 0:
                     line = self.serial.readline().decode('utf-8').strip()
-                    print(line)
                     if line:
                         response_lines.append(line)
                         if line == "COMMAND EXECUTED" or line.startswith("OK"):
