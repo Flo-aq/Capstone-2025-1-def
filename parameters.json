@@ -16,7 +16,7 @@
   "camera_settings": {
     "fov_h_deg": 62.2,
     "fov_v_deg": 48.8,
-    "height_mm": 250,
+    "height_mm": 245,
     "photo_config": {
       "size": [3280, 2464],
       "format": "RGB888"

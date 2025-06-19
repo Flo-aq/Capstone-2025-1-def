@@ -62,7 +62,6 @@ class ArduinoMegaScanner(Arduino):
             return "E: Arduino Uno not connected"
         try:
             self.serial.reset_input_buffer()
-
             if not command.endswith('\n'):
                 command += '\n'
 
@@ -74,7 +73,7 @@ class ArduinoMegaScanner(Arduino):
             if self.serial.in_waiting > 0:
                 self.serial.reset_input_buffer()
 
-            while time.time() - start_time < 5:
+            while time.time() - start_time < 20:
                 if self.serial.in_waiting > 0:
                     line = self.serial.readline().decode('utf-8').strip()
                     if line:

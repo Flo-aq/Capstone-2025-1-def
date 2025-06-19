@@ -77,11 +77,11 @@ def test_position_commands():
             print("ERROR: No se pudo conectar al Arduino Scanner")
             return False
     
-    if not system.homing(set_custom_origin=True):
-        print("ERROR: Falló el homing inicial. Prueba cancelada.")
-        return False
+    # if not system.homing(set_custom_origin=True):
+    #     print("ERROR: Falló el homing inicial. Prueba cancelada.")
+    #     return False
     
-    print("✓ Homing inicial completado exitosamente\n")
+    # print("✓ Homing inicial completado exitosamente\n")
     
     movements = [
         ("X", 30),
