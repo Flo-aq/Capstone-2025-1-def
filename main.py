@@ -1,9 +1,7 @@
 from Controllers.DeviceManager import DeviceManager
 from Camera.Camera import Camera
 from Camera.CameraBox import CameraBox
-from ImagesClasses.ImageFunction1 import ImageFunction1
-from ImagesClasses.ImageFunction3 import ImageFunction3
-from Paper import Paper
+
 from ReferenceSystem import ReferenceSystem
 from Functions.AuxFunctions import load_json
 from os.path import join
@@ -60,7 +58,9 @@ class Main:
     
     def move_to_position(self, x_mm, y_mm):
         distance_x = x_mm - self.camera_box.x
+        print(distance_x)
         distance_y = y_mm - self.camera_box.y
+        print(distance_y)
         
         self.move_specific_distance(distance_x, distance_y)
         
@@ -109,7 +109,7 @@ class Main:
         save_dir = f"captured_corners_{timestamp}"
         os.makedirs(save_dir, exist_ok=True)
 
-        corners = ["top-left", "top-right", "bottom-right", "bottom-left"]
+        corners = ["top_left", "top_right", "bottom_right", "bottom_left"]
         
         corner_imgs = {}
         
@@ -134,35 +134,36 @@ class Main:
         return corner_imgs
 
     def first_phase(self):
-        if not self.homing(set_custom_origin=True):
-            print("E: Initial homing failed. Exiting first phase.")
-            return False
+        pass
+        # if not self.homing(set_custom_origin=True):
+        #     print("E: Initial homing failed. Exiting first phase.")
+        #     return False
 
-        self.top_left_img = ImageFunction1(image=None, camera=self.camera, parameters=self.config)
-        self.top_left_img.capture_and_process()
+        # self.top_left_img = ImageFunction1(image=None, camera=self.camera, parameters=self.config)
+        # self.top_left_img.capture_and_process()
 
-        if self.top_left_img.image is None:
-            print("E: Failed to capture top left image.")
-            return False
+        # if self.top_left_img.image is None:
+        #     print("E: Failed to capture top left image.")
+        #     return False
 
-        self.move_to_corner("bottom-right")
+        # self.move_to_corner("bottom-right")
 
-        self.bottom_right_img = ImageFunction1(image=None,camera=self.camera,parameters=self.config)
-        self.bottom_right_img.capture_and_process()
+        # self.bottom_right_img = ImageFunction1(image=None,camera=self.camera,parameters=self.config)
+        # self.bottom_right_img.capture_and_process()
 
-        if self.bottom_right_img.image is None:
-            print("E: Failed to capure bottom right image")
+        # if self.bottom_right_img.image is None:
+        #     print("E: Failed to capure bottom right image")
         
-        self.paper = Paper(self.config, self.camera, self.translator)
-        self.paper.set_position(self.top_left_img, self.bottom_right_img)
+        # self.paper = Paper(self.config, self.camera, self.translator)
+        # self.paper.set_position(self.top_left_img, self.bottom_right_img)
 
-        for i, pos in enumerate(self.paper.capture_positions):
-            print(f"Moving camera to capture position {pos}...")
-            print(f"Capturing image {i + 1}...")
-            self.move_to_position(pos[0], pos[1])
-            img = ImageFunction3(
-                image=None,
-                camera=self.camera
-            )
-            img.capture_and_process()
-            self.imgs.append(img)
+        # for i, pos in enumerate(self.paper.capture_positions):
+        #     print(f"Moving camera to capture position {pos}...")
+        #     print(f"Capturing image {i + 1}...")
+        #     self.move_to_position(pos[0], pos[1])
+        #     img = ImageFunction3(
+        #         image=None,
+        #         camera=self.camera
+        #     )
+        #     img.capture_and_process()
+        #     self.imgs.append(img)

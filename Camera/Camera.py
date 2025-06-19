@@ -1,5 +1,5 @@
 import numpy as np
-
+from picamera2 import Picamera2
 
 class Camera:
     """ 
@@ -52,7 +52,7 @@ class Camera:
     def initialize_camera(self):
         """Initialize camera hardware in photo mode."""
         if self.camera is None:
-            # self.camera = Picamera2()
+            self.camera = Picamera2()
             camera_config = self.camera.create_preview_configuration(
                 main={"size": (self.photo_h_res, self.photo_v_res)}
             )
