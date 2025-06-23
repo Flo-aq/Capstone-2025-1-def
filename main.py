@@ -1,7 +1,9 @@
 from Controllers.DeviceManager import DeviceManager
 from Camera.Camera import Camera
 from Camera.CameraBox import CameraBox
-
+from Paper import Paper
+from ImageClasses.PaperSectionImage import PaperSectionImage
+from ImageClasses.PaperImage import PaperImage
 from ReferenceSystem import ReferenceSystem
 from Functions.AuxFunctions import load_json
 from ImageClasses.CornerImage import CornerImage
@@ -9,6 +11,9 @@ from os.path import join
 import os
 import cv2
 from datetime import datetime
+import numpy as np
+import matplotlib.pyplot as plt
+import time
 
 
 class Main:
@@ -46,6 +51,7 @@ class Main:
             return None
         else:
             response_lines = response.split("\n")
+            print(response_lines)
             for line in response_lines:
               if line.startswith("E"):
                 print(f"Error moving camera box: {line.split(' ')[1]}")
@@ -73,8 +79,10 @@ class Main:
             self.move_axis_arduino(1, distance_y_mm)
     
     def move_to_corner(self, corner_name):
+        print(self.camera_box.get_corner_coordinates())
         corner_coords = self.camera_box.get_specific_corner_coordinates(corner_name)
         if corner_coords:
+            print(f"Moving to {corner_name} corner at coordinates: {corner_coords}")
             self.move_to_position(corner_coords[0], corner_coords[1])
         else:
             print(f"E: Invalid corner name '{corner_name}'")
@@ -90,8 +98,10 @@ class Main:
         
         if set_custom_origin:
             response = self.device_manager.arduino_mega_scanner.home_and_set_origin()
+            time.sleep(1) 
         else:
             response = self.device_manager.arduino_mega_scanner.full_homing()
+            time.sleep(1) 
         if response.startswith("E:"):
             print(f"Error during homing: {response}")
             return False
@@ -135,54 +145,100 @@ class Main:
         return corner_imgs
 
     def first_phase(self):
-          
+        print("Starting first phase - homing...")
         homing_success = self.homing(set_custom_origin=True)
+        if not homing_success:
+            print("E: Homing failed")
+            return False
         
-        x_limit = float(self.device_manager.arduino_mega_scanner.max_limit_x())
-        y_limit = float(self.device_manager.arduino_mega_scanner.max_limit_y())
+        # Pausa explícita después de homing
+        time.sleep(2)
         
+        print("Getting X limit...")
+        x_limit_response = self.device_manager.arduino_mega_scanner.max_limit_x()
+        # No continuar hasta tener una respuesta válida
+        if x_limit_response and not x_limit_response.startswith("E:"):
+            try:
+                x_limit = float(x_limit_response)
+                print(f"X limit: {x_limit}")
+            except ValueError:
+                print(f"E: Invalid X limit value: {x_limit_response}")
+                return False
+        else:
+            print("E: Failed to get X limit")
+            return False
+            
+        # Pausa explícita entre comandos
+        time.sleep(1)
+        
+        print("Getting Y limit...")
+        y_limit_response = self.device_manager.arduino_mega_scanner.max_limit_y()
+        # No continuar hasta tener una respuesta válida
+        if y_limit_response and not y_limit_response.startswith("E:"):
+            try:
+                y_limit = float(y_limit_response)
+                print(f"Y limit: {y_limit}")
+            except ValueError:
+                print(f"E: Invalid Y limit value: {y_limit_response}")
+                return False
+        else:
+            print("E: Failed to get Y limit")
+            return False
+        
+        print(f"Setting reference system limits: X={x_limit}, Y={y_limit}")
         self.reference_system.set_limits(x_limit, y_limit)
+        print(f"Reference system limits: X={self.reference_system.max_x}, Y={self.reference_system.max_y}")
+        
+        print(self.reference_system.max_x, self.reference_system.max_y)
     
         self.top_left_img = CornerImage(image=None, camera=self.camera, parameters=self.config)
         self.top_left_img.capture_and_process()
 
         if self.top_left_img.image is None:
             print("E: Failed to capture top left image.")
-            return False
+            return False         
         
-        save_dir = "ImagenesPrueba"
-        os.makedirs(save_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        img_path = os.path.join(save_dir, f"top_left_{timestamp}.jpg")
-        cv2.imwrite(img_path, self.top_left_img.image)
-        return True
+        self.move_to_corner("bottom_right")
+        self.bottom_right_img = CornerImage(image=None,camera=self.camera,parameters=self.config)
+        self.bottom_right_img.capture_and_process()
 
-        # self.bottom_right_img = ImageFunction1(image=None,camera=self.camera,parameters=self.config)
-        # self.bottom_right_img.capture_and_process()
-
-        # if self.bottom_right_img.image is None:
-        #     print("E: Failed to capure bottom right image")
+        if self.bottom_right_img.image is None:
+            print("E: Failed to capure bottom right image")
         
-        # self.paper = Paper(self.config, self.camera, self.translator)
-        # self.paper.set_position(self.top_left_img, self.bottom_right_img)
+        
+        self.paper = Paper(self.config, self.camera, self.translator)
+        self.paper.set_position(self.top_left_img, self.bottom_right_img)
 
-        # for i, pos in enumerate(self.paper.capture_positions):
-        #     print(f"Moving camera to capture position {pos}...")
-        #     print(f"Capturing image {i + 1}...")
-        #     self.move_to_position(pos[0], pos[1])
-        #     img = ImageFunction3(
-        #         image=None,
-        #         camera=self.camera
-        #     )
-        #     img.capture_and_process()
-        #     self.imgs.append(img)
+        for i, pos in enumerate(self.paper.capture_positions):
+            print(f"Moving camera to capture position {pos}...")
+            print(f"Capturing image {i + 1}...")
+            self.move_to_position(pos[0], pos[1])
+            img = PaperSectionImage(
+                image=None,
+                camera=self.camera
+            )
+            img.capture_and_process()
+            self.imgs.append(img)
+        
+        # self.paper.image = PaperImage(camera=self.camera,
+        # images=self.imgs,
+        # parameters=self.config)
+        # print("Creating paper image...")
+        # self.paper.image.create_image()
+        # self.paper.get_text()
+        # self.paper.translate_text()
+        # print("Text captured and translated.")
+        # print("Generating braille coordinates...")
+        # self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
+        # print(f"Total pages: {self.braille_converter.pages}")
 
 if __name__ == "__main__":
     main = Main()
     
-    # Example usage
-    if main.first_phase():
+    success = main.first_phase()
+    if success:
         print("First phase completed successfully.")
     else:
         print("First phase failed.")
+    
     

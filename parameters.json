@@ -28,7 +28,7 @@
     }
   },
   "first_module": {
-    "kernel_size": 71,
+    "kernel_size": 101,
     "sigma": 0,
     "low_threshold": 100,
     "high_threshold": 200,
