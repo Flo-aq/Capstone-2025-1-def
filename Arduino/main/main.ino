@@ -23,8 +23,8 @@ const int STEPS_PER_REV = 200 * 16;
 const float LEAD_SCREW_PITCH = 8.0;
 const float STEPS_PER_MM = STEPS_PER_REV / LEAD_SCREW_PITCH;
 ////////////////////////////////////////////////////////////////
-const int MAX_POS_X = 150;
-const int MAX_POS_Y = 140;
+const int MAX_POS_X = 195 - 51.86;
+const int MAX_POS_Y = 211 - 27.39;
 const int MIN_POS_X = 0;
 const int MIN_POS_Y = 0;
 ////////////////////////////////////////////////////////////////
@@ -53,8 +53,8 @@ const unsigned long resetCooldown = 1000;
 const int PRECISION_THRESHOLD_ON = 15;  // Umbral para activar alta precisión
 const int PRECISION_THRESHOLD_OFF = 25; // Umbral para desactivar (más grande)
 ////////////////////////////////////////////////////////////////
-const float ORIGIN_OFFSET_X = 64.0; // Ajusta según la posición real del origen
-const float ORIGIN_OFFSET_Y = 30.5; // Ajusta según la posición real del origen
+const float ORIGIN_OFFSET_X = 51.86; // Ajusta según la posición real del origen
+const float ORIGIN_OFFSET_Y = 27.39; // Ajusta según la posición real del origen
 ////////////////////////////////////////////////////////////////
 float kp = 0.8;
 float ki = 0.1;
@@ -272,7 +272,7 @@ void moveMM(int stepPin, int dirPin, float distance, bool isXaxis) {
    }
    
   if (adjustedDistance == 0) {
-    Serial.print("OK: 0")
+    Serial.print("OK: 0");
     return;
   }
 
