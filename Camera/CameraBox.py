@@ -24,7 +24,7 @@ class CameraBox:
 
         self.x = None
         self.y = None
-
+        
         self.set_position(x_position, y_position)
 
     def set_position(self, x_position, y_position):
@@ -38,19 +38,6 @@ class CameraBox:
         self.x = x_position
         self.y = y_position
 
-    def get_fov_corners(self):
-        """
-        Get the coordinates of the current field of view corners.
-        Returns:
-            dict: Corner coordinates in format {corner_name: (x, y)}
-        """
-        return {
-            'top_left': (0,0),
-            'top_right': (0, 150),
-            'bottom_left': (100, 0),
-            'bottom_right': (100, 150)
-        }
-
     def move_distance(self, axis, distance):
         if axis == 0:
             self.x += distance
@@ -58,12 +45,7 @@ class CameraBox:
             self.y += distance
     
     def get_specific_corner_coordinates(self, corner_name):
-        corners = {
-            'top_left': (0,0),
-            'top_right': (0, 150),
-            'bottom_left': (100, 0),
-            'bottom_right': (100, 150)
-        }
+        corners = self.get_corner_coordinates()
         
         if corner_name not in corners:
             raise ValueError(f"Invalid corner. Must be one of {list(corners.keys())}")
@@ -71,10 +53,11 @@ class CameraBox:
         return corners[corner_name]
     
     def get_corner_coordinates(self):
-      return {'top_left': (0,0),
-            'top_right': (0, 150),
-            'bottom_left': (100, 0),
-            'bottom_right': (100, 150)
-      }
+      return {
+            'top_left': (self.reference_system.min_x, self.reference_system.min_y),
+            'top_right': (self.reference_system.max_x, self.reference_system.min_y),
+            'bottom_left': (self.reference_system.min_x, self.reference_system.max_y),
+            'bottom_right': (self.reference_system.max_x, self.reference_system.max_y)
+        }
 
     

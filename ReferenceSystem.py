@@ -17,11 +17,6 @@ class ReferenceSystem:
         self.width_mm = parameters["dimensions"]["width_mm"]
         self.height_mm = parameters["dimensions"]["height_mm"]
 
-        self.max_x = parameters["max_coordinates"]["x"]
-        self.max_y = parameters["max_coordinates"]["y"]
-        self.min_x = parameters["min_coordinates"]["x"]
-        self.min_y = parameters["min_coordinates"]["y"]
-
         self.origin_x = 0
         self.origin_y = 0
 
@@ -52,4 +47,19 @@ class ReferenceSystem:
         """
         self.video_width_px = int(self.width_mm / mm_per_px_x)
         self.video_height_px = int(self.height_mm / mm_per_px_y)
+    
+    def set_limits(self, max_x, max_y):
+        """
+        Set the movement limits for the reference system.
+        
+        Args:
+            max_x (float): Maximum X coordinate in mm
+            min_x (float): Minimum X coordinate in mm
+            max_y (float): Maximum Y coordinate in mm
+            min_y (float): Minimum Y coordinate in mm
+        """
+        self.max_x = max_x
+        self.min_x = 0
+        self.max_y = max_y
+        self.min_y = 0
     
