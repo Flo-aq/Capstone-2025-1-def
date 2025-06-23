@@ -1,4 +1,4 @@
-from ImagesClasses.Image import Image
+from ImageClasses.Image import Image
 from Functions.FirstModuleFunctions import (
     first_module_process_image,
     add_border,

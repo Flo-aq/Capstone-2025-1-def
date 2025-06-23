@@ -83,7 +83,6 @@ class Image:
         Capture an image or video frame based on function mode and process if needed.
         
         """
-        self.camera.switch_mode("photo")
         self.image = self.camera.capture_image()
         print("Processing image...")
         self.process()

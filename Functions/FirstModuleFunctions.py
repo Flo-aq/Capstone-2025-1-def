@@ -13,9 +13,10 @@ def first_module_process_image(image, kernel_size, sigma):
     Returns:
         numpy.ndarray: Binary image ready for edge detection
     """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    rotated = cv2.rotate(image, cv2.ROTATE_180)
+    gray = cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (kernel_size, kernel_size), sigma)
-    binary = cv2.threshold(blurred, 130, 255, cv2.THRESH_BINARY)[1]
+    binary = cv2.threshold(blurred, 100, 255, cv2.THRESH_BINARY)[1]
     
     return binary
 
