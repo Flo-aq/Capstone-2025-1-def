@@ -4,6 +4,7 @@ from Camera.CameraBox import CameraBox
 
 from ReferenceSystem import ReferenceSystem
 from Functions.AuxFunctions import load_json
+from ImageClasses.CornerImage import CornerImage
 from os.path import join
 import os
 import cv2
@@ -134,19 +135,27 @@ class Main:
         return corner_imgs
 
     def first_phase(self):
-        pass
-        # if not self.homing(set_custom_origin=True):
-        #     print("E: Initial homing failed. Exiting first phase.")
-        #     return False
+          
+        homing_success = self.homing(set_custom_origin=True)
+        
+        x_limit = float(self.device_manager.arduino_mega_scanner.max_limit_x())
+        y_limit = float(self.device_manager.arduino_mega_scanner.max_limit_y())
+        
+        self.reference_system.set_limits(x_limit, y_limit)
+    
+        self.top_left_img = CornerImage(image=None, camera=self.camera, parameters=self.config)
+        self.top_left_img.capture_and_process()
 
-        # self.top_left_img = ImageFunction1(image=None, camera=self.camera, parameters=self.config)
-        # self.top_left_img.capture_and_process()
-
-        # if self.top_left_img.image is None:
-        #     print("E: Failed to capture top left image.")
-        #     return False
-
-        # self.move_to_corner("bottom-right")
+        if self.top_left_img.image is None:
+            print("E: Failed to capture top left image.")
+            return False
+        
+        save_dir = "ImagenesPrueba"
+        os.makedirs(save_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        img_path = os.path.join(save_dir, f"top_left_{timestamp}.jpg")
+        cv2.imwrite(img_path, self.top_left_img.image)
+        return True
 
         # self.bottom_right_img = ImageFunction1(image=None,camera=self.camera,parameters=self.config)
         # self.bottom_right_img.capture_and_process()
@@ -167,3 +176,13 @@ class Main:
         #     )
         #     img.capture_and_process()
         #     self.imgs.append(img)
+
+if __name__ == "__main__":
+    main = Main()
+    
+    # Example usage
+    if main.first_phase():
+        print("First phase completed successfully.")
+    else:
+        print("First phase failed.")
+    
