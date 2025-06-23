@@ -23,8 +23,8 @@ const int STEPS_PER_REV = 200 * 16;
 const float LEAD_SCREW_PITCH = 8.0;
 const float STEPS_PER_MM = STEPS_PER_REV / LEAD_SCREW_PITCH;
 ////////////////////////////////////////////////////////////////
-const int MAX_POS_X = 100;
-const int MAX_POS_Y = 100;
+const int MAX_POS_X = 150;
+const int MAX_POS_Y = 140;
 const int MIN_POS_X = 0;
 const int MIN_POS_Y = 0;
 ////////////////////////////////////////////////////////////////
@@ -53,8 +53,8 @@ const unsigned long resetCooldown = 1000;
 const int PRECISION_THRESHOLD_ON = 15;  // Umbral para activar alta precisión
 const int PRECISION_THRESHOLD_OFF = 25; // Umbral para desactivar (más grande)
 ////////////////////////////////////////////////////////////////
-const float ORIGIN_OFFSET_X = 20.0; // Ajusta según la posición real del origen
-const float ORIGIN_OFFSET_Y = 20.0; // Ajusta según la posición real del origen
+const float ORIGIN_OFFSET_X = 64.0; // Ajusta según la posición real del origen
+const float ORIGIN_OFFSET_Y = 30.5; // Ajusta según la posición real del origen
 ////////////////////////////////////////////////////////////////
 float kp = 0.8;
 float ki = 0.1;
@@ -119,8 +119,18 @@ void processCommand(String command) {
 
   if (command == "HX") {
     bool succesfull = homing(STEP_X, DIR_X, ENDSTOP_X, true);
+    if (succesfull) {
+      Serial.println("OK");
+    } else {
+      Serial.println("E: HOMING FAILED");
+    }
   } else if (command == "HY") {
     bool succesfull = homing(STEP_Y, DIR_Y, ENDSTOP_Y, false);
+    if (succesfull) {
+      Serial.println("OK");
+    } else {
+      Serial.println("E: HOMING FAILED");
+    }
   } else if (command.startsWith("MX ")) {
     float distance = command.substring(3).toFloat();
     moveMM(STEP_X, DIR_X, distance, true);
@@ -157,6 +167,10 @@ void processCommand(String command) {
     current_pos_y = 0.0;
 
     Serial.println("OK");
+  } else if (command == "XLIMIT") {
+    Serial.println(MAX_POS_X);
+  } else if (command == "YLIMIT") {
+    Serial.println(MAX_POS_Y);
   } else {
     Serial.println("E: CNF");
   }
@@ -215,17 +229,9 @@ bool homing(int stepPin, int dirPin, int endstopPin, bool homingDirection) {
       stopMotors();
       return false;
     }
+  
   }
-
-  if (homingDirection) {
-    moveMM(STEP_X, DIR_X, 30, true);
-    current_pos_x = 0.0;
-  } else {
-    moveMM(STEP_Y, DIR_Y, 30, false);
-    current_pos_y = 0.0;
-  }
-
-  Serial.println("OK: H");
+  
   digitalWrite(EN_PIN, HIGH);
   return true;
 }
@@ -237,7 +243,6 @@ bool performFullHoming() {
   delay(100);
   return succesfull_x && succesfull_y;
 }
-
 
 
 void makeStep(int stepPin, int delayTime) {
@@ -267,6 +272,7 @@ void moveMM(int stepPin, int dirPin, float distance, bool isXaxis) {
    }
    
   if (adjustedDistance == 0) {
+    Serial.print("OK: 0")
     return;
   }
 

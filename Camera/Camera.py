@@ -79,4 +79,15 @@ class Camera:
         self.release_camera()
         return img
     
+    def get_fov_corners(self):
+        top_left = (self.x - self.fov_h_mm / 2, self.y - self.fov_v_mm / 2)
+        top_right = (self.x + self.fov_h_mm / 2, self.y - self.fov_v_mm / 2)
+        bottom_left = (self.x - self.fov_h_mm / 2, self.y + self.fov_v_mm / 2)
+        bottom_right = (self.x + self.fov_h_mm / 2, self.y + self.fov_v_mm / 2)
+        return {
+            'top_left': top_left,
+            'top_right': top_right,
+            'bottom_left': bottom_left,
+            'bottom_right': bottom_right
+        }
     

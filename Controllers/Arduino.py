@@ -77,7 +77,8 @@ class ArduinoMegaScanner(Arduino):
                 if self.serial.in_waiting > 0:
                     line = self.serial.readline().decode('utf-8').strip()
                     if line:
-                        response_lines.append(line)
+                        if line.startswith("OK") or line != "COMMAND EXECUTED":
+                            response_lines.append(line)
                         if line == "COMMAND EXECUTED" or line.startswith("OK"):
                             break
                 else:
@@ -91,8 +92,6 @@ class ArduinoMegaScanner(Arduino):
             else:
                 return "\n".join(response_lines)
               
-            return "\n".join(response_lines)  # Return the last line as the response
-
         except Exception as e:
             return f"E: {str(e)}"
 
@@ -130,6 +129,12 @@ class ArduinoMegaScanner(Arduino):
 
     def home_and_set_origin(self):
         return self.send_command("HOME&SET&ORIGIN")
+    
+    def max_limit_x(self):
+        return self.send_command("XLIMIT")
+    
+    def max_limit_y(self):
+        return self.send_command("YLIMIT")
 
 class ArduinoMegaPrinter(Arduino):
     def __init__(self, baudrate=115200, port=None):
