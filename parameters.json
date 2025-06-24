@@ -35,7 +35,7 @@
     "border_size": 40
   },
   "second_module": {
-    "camera_positioning_margin": 20
+    "camera_positioning_margin": 0
   },
   "paper": {
     "dimensions": {

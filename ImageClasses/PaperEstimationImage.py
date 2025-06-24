@@ -262,11 +262,13 @@ class PaperEstimationImage(Image):
             list: List of (x_mm, y_mm) tuples in millimeter coordinates
         """
         mm_positions = []
+        x_offset = (self.width_px / 2) * self.camera.mm_per_px_h
+        y_offset = (self.height_px / 2) * self.camera.mm_per_px_v
         for x, y in positions:
             
             # Convert to millimeters
-            x_mm = x * self.camera.mm_per_px_h
-            y_mm = y * self.camera.mm_per_px_v
+            x_mm = x_px * self.camera.mm_per_px_h - x_offset
+            y_mm = y_px * self.camera.mm_per_px_v - y_offset
             
             mm_positions.append((x_mm, y_mm))
         return mm_positions
