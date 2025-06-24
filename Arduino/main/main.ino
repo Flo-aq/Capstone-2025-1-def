@@ -261,20 +261,20 @@ void moveMM(int stepPin, int dirPin, float distance, bool isXaxis) {
 
   if (isXaxis) {
      if (finalPosition < MIN_POS_X) {
-       adjustedDistance = -current_pos_x;
+       adjustedDistance = MIN_POS_X - current_pos_x;
      } else if (finalPosition > MAX_POS_X) {
        adjustedDistance = MAX_POS_X - current_pos_x;
      }
    } else {
      if (finalPosition < MIN_POS_Y) {
-       adjustedDistance = -current_pos_y;
+       adjustedDistance = MIN_POS_Y - current_pos_y;
      } else if (finalPosition > MAX_POS_Y) {
        adjustedDistance = MAX_POS_Y - current_pos_y;
      }
    }
    
   if (adjustedDistance == 0) {
-    Serial.print("OK: 0");
+    Serial.println("OK: 0");
     return;
   }
 
