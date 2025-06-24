@@ -1,83 +1,97 @@
-from ImageClasses.Image import Image
-import numpy as np
+import pytesseract
 import cv2
+import time
 
-class PaperImage(Image):
-    def __init__(self, camera, images, parameters):
+class PaperImage():
+    """
+    Class for processing paper images and extracting text using OCR.
+    Handles image orientation, DPI calculation, and text extraction.
+    """
+    def __init__(self, image, parameters, width_mm, height_mm):
         """
-        Initialize ImageFunction4 with camera and list of images.
-        
+        Initialize PaperImage with image and physical dimensions.
+
         Args:
-            camera (Camera): Camera object for image acquisition
-            images (list): List of ImageFunction3 instances to compose
+            image (numpy.ndarray): Input image array
+            parameters (dict): Processing parameters with 'third_module' key
+            width_mm (float): Paper width in millimeters
+            height_mm (float): Paper height in millimeters
         """
-        super().__init__(function=4, image=None, camera=camera)
-        self.images = images
-        self.lines = None
-        self.parameters = parameters["first_module"]
+        self.parameters = parameters["third_module"]
+        self.text = None
+        self.image = image
+        self.width_mm = width_mm
+        self.height_mm = height_mm
+        self.height_px = self.image.shape[0]
+        self.width_px = self.image.shape[1]
     
-    def create_image(self):
+    
+    def get_orientation(self):
         """
-        Creates a composite panorama from multiple images using their corner positions.
-        Places each image in its correct position in the reference system.
-        
-        Raises:
-            ValueError: If no images are provided
-        """
-        if not self.images:
-            raise ValueError("No images provided for composite image creation")
-        panorama = np.zeros((self.height_px, self.width_px), dtype=np.uint8)
-        current_panorama = panorama.copy()
-        for idx, img in enumerate(self.images):
-            if img.image is None:
-                img.process()
+        Detect if image is rotated 180 degrees using Tesseract OCR.
 
-            y_start = img.corners_positions_px['top_left'][1]
-            x_start = img.corners_positions_px['top_left'][0]
-            y_end = y_start + img.height_px
-            x_end = x_start + img.width_px
-            print(f"Placing image {idx + 1} at position: ({x_start}, {y_start}) to ({x_end}, {y_end})")
-            current_panorama[y_start:y_end, x_start:x_end] = img.image
-
-        print("Composite image created.")
-        self.image = current_panorama
-        
-    def extract_and_rotate(self, corners_px, width, height):
-        """
-        Extracts and rotates paper region based on corner positions.
-
-        Args:
-            corners_positions_px (dict): Dictionary with corner positions in pixels
-            width_mm (float): Target width in millimeters
-            height_mm (float): Target height in millimeters
-        
         Returns:
-            ndarray: Transformed and rotated image
+            bool: True if image is rotated 180 degrees, False otherwise
+
+        Raises:
+            RuntimeError: If Tesseract OCR is not properly installed
         """
-        if self.image is None:
-            raise ValueError("No image to process")
-        if None in corners_px.values():
-            raise ValueError("Corners positions cannot be None")
-
-        corners = np.float32([
-            corners_px['top_left'],
-            corners_px['top_right'],
-            corners_px['bottom_right'],
-            corners_px['bottom_left']
-        ])
-        
-        dst_width = int(width / self.camera.mm_per_px_h)
-        dst_height = int(height / self.camera.mm_per_px_v)
-
-        dst_points = np.float32([
-            [0,0],
-            [dst_width, 0],
-            [dst_width, dst_height],
-            [0, dst_height]
-        ])
-               
-        matrix = cv2.getPerspectiveTransform(corners, dst_points)
-        warped = cv2.warpPerspective(self.image, matrix, (dst_width, dst_height))
-        
-        return warped
+        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+        osd = pytesseract.image_to_osd(self.image, output_type=pytesseract.Output.DICT)
+        rotation = osd["rotate"]
+        return rotation == 180
     
+    def process(self):
+        """
+        Process image by correcting orientation if needed.
+        Rotates image 180 degrees if detected as upside down.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        if self.get_orientation():
+            self.image = cv2.rotate(self.image, cv2.ROTATE_180)
+
+    
+    def calculate_dpi(self):
+        """
+        Calculate average DPI based on image dimensions and physical size.
+
+        Returns:
+            int: Average DPI (dots per inch) across horizontal and vertical directions
+        """
+        dpi_h = self.width_px / (self.width_mm / 25.4)
+
+        dpi_v = self.height_px / (self.height_mm / 25.4)
+        
+        return int((dpi_h + dpi_v) / 2)
+
+    
+    def get_text(self):
+        """
+        Extract text from image using Tesseract OCR.
+        Processes image orientation and sets appropriate DPI before extraction.
+
+        Returns:
+            str: Extracted text from the image
+
+        Side effects:
+            - Updates self.text with extracted content
+            - Prints extraction timing information
+        """
+        self.process()
+        tesseract_config = self.parameters["config"]
+        tesseract_config += f" --dpi {self.calculate_dpi()}"
+        start_time = time.time()
+        self.text = pytesseract.image_to_string(self.image, config=tesseract_config)
+        end_time = time.time()
+        extraction_time = end_time - start_time
+        print("--------------------")
+        print("--------------------")
+        print(f"Tiempo de extracción de texto: {extraction_time:.4f} segundos")
+        print("--------------------")
+        print("--------------------")
+        return self.text

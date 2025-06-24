@@ -4,7 +4,7 @@ class Image:
     pixel and millimeter spaces in both image and reference system contexts.
     """
 
-    def __init__(self, function, image, camera):
+    def __init__(self, function, image, camera_box):
         """
         Initialize the Image class with a function, image, and camera.
 
@@ -15,7 +15,8 @@ class Image:
         """
         self.function = function
         self.image = image
-        self.camera = camera
+        self.camera_box = camera_box
+        self.camera = camera_box.camera
 
         if function not in [2, 4]:
             self.height_mm = self.camera.fov_v_mm
@@ -23,10 +24,10 @@ class Image:
             self.height_px = self.camera.fov_v_px
             self.width_px = self.camera.fov_h_px
         else:
-            self.height_mm = self.camera.reference_system.height_mm
-            self.width_mm = self.camera.reference_system.width_mm
-            self.height_px = int(self.camera.reference_system.height_mm / self.camera.mm_per_px_v)
-            self.width_px = int(self.camera.reference_system.width_mm / self.camera.mm_per_px_h)
+            self.height_mm = self.camera.reference_system.range_of_motion_height_mm + self.camera.fov_v_mm
+            self.width_mm = self.camera.reference_system.range_of_motion_width_mm+ self.camera.fov_h_mm
+            self.height_px = int(self.height_mm / self.camera.mm_per_px_v)
+            self.width_px = int(self.width_mm/ self.camera.mm_per_px_h)
 
     def get_mm_coordinates_in_img(self, x_px, y_px):
         """
@@ -55,8 +56,8 @@ class Image:
         Returns:
             tuple: Pixel coordinates (x, y) in reference system space
         """
-        x = (self.camera.x * self.camera.mm_per_px_h - self.width_px / 2) + x_px
-        y = (self.camera.y * self.camera.mm_per_px_v - self.height_px / 2) + y_px
+        x = (self.camera_box.x * self.camera.mm_per_px_h - self.width_px / 2) + x_px
+        y = (self.camera_box.y * self.camera.mm_per_px_v - self.height_px / 2) + y_px
 
         return x, y
 
@@ -71,9 +72,9 @@ class Image:
         Returns:
             tuple: Millimeter coordinates (x, y) in reference system space
         """
-        x = (self.camera.x - self.width_mm / 2) + \
+        x = (self.camera_box.x - self.width_mm / 2) + \
             x_px * self.camera.mm_per_px_h
-        y = (self.camera.y - self.height_mm / 2) + \
+        y = (self.camera_box.y - self.height_mm / 2) + \
             y_px * self.camera.mm_per_px_v
 
         return x, y

@@ -9,7 +9,7 @@ class Paper:
     A class representing a paper document in the system.
     Handles paper detection, corner calculation, and capture position planning.
     """
-    def __init__(self, config, camera, translator):
+    def __init__(self, config, camera_box, translator):
         """
         Initialize Paper object with configuration and camera settings.
         
@@ -20,14 +20,15 @@ class Paper:
         Raises:
             ValueError: If config or camera is not provided
         """
-        if not config or not camera:
+        if not config or not camera_box:
             raise ValueError(
                 "Config and camera must be provided")
         if not translator:
             raise ValueError(
                 "Translator must be provided")
         self.translator = translator
-        self.camera = camera
+        self.camera_box = camera_box
+        self.camera = camera_box.camera
         paper_config = config["paper"]
         self.image_config = config
         self.corners_mm = {
@@ -65,7 +66,7 @@ class Paper:
         if top_image.polygon is [] and bottom_image.polygon is []:
             raise ValueError(
                 "Could not detect paper in the provided images")
-        self.composed_image = PaperEstimationImage(self.camera, top_image, bottom_image, self.image_config)
+        self.composed_image = PaperEstimationImage(self.camera_box, top_image, bottom_image, self.image_config)
         self.composed_image.process(self.width_mm, self.height_mm)
         self.polygon = self.composed_image.polygon
         self.update_corners()

@@ -14,8 +14,8 @@ class ReferenceSystem:
         """
         parameters = config["reference_system"]
 
-        self.width_mm = parameters["dimensions"]["width_mm"]
-        self.height_mm = parameters["dimensions"]["height_mm"]
+        self.range_of_motion_width_mm = 0
+        self.range_of_motion_height_mm = 0
 
         self.origin_x = 0
         self.origin_y = 0
@@ -36,17 +36,6 @@ class ReferenceSystem:
         """
         self.photo_width_px = int(self.width_mm / mm_per_px_x)
         self.photo_height_px = int(self.height_mm / mm_per_px_y)
-
-    def set_video_dimensions(self, mm_per_px_x, mm_per_px_y):
-        """
-        Calculate and set video mode dimensions in pixels based on mm/pixel ratios.
-        
-        Args:
-            mm_per_px_x (float): Millimeters per pixel in horizontal direction
-            mm_per_px_y (float): Millimeters per pixel in vertical direction
-        """
-        self.video_width_px = int(self.width_mm / mm_per_px_x)
-        self.video_height_px = int(self.height_mm / mm_per_px_y)
     
     def set_limits(self, max_x, max_y):
         """
@@ -62,4 +51,7 @@ class ReferenceSystem:
         self.min_x = 0
         self.max_y = max_y
         self.min_y = 0
+        
+        self.range_of_motion_width_mm = self.max_x - self.min_x
+        self.range_of_motion_height_mm = self.max_y - self.min_y
     

@@ -6,7 +6,7 @@ class PaperSectionImage(Image):
     Specialized Image class for processing images with corner position tracking.
     Handles binary threshold processing of images.
     """
-    def __init__(self, camera, image):
+    def __init__(self, camera_box, image):
         """
         Initialize ImageFunction3 with camera and image.
         
@@ -14,7 +14,7 @@ class PaperSectionImage(Image):
             camera (Camera): Camera object for image acquisition
             image (ndarray): Input image to process
         """
-        super().__init__(function=3, image=image, camera=camera)
+        super().__init__(function=3, image=image, camera_box=camera_box)
         self.corners_positions_mm = self.camera.get_fov_corners()
         self.corners_positions_px = self.calculate_corners_positions()
 

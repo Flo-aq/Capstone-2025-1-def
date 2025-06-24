@@ -1,0 +1,32 @@
+{
+    "superíndice": {
+        "dots": [1,6],
+        "unicode": "\\u2821",
+        "binary": [1,0,0,0,0,1]
+    },
+    "mayus": {
+        "dots": [4,6],
+        "unicode": "\\u2828",
+        "binary": [0,0,0,1,0,1]
+    },
+    "numero": {
+        "dots": [3,4,5,6],
+        "unicode": "\\u283c",
+        "binary": [0,0,1,1,1,1]
+    },
+    "interruptor_numero": {
+        "dots": [5],
+        "unicode": "\\u2810",
+        "binary": [0,0,0,0,1,0]
+    },
+    "separador_millares": {
+        "dots": [3],
+        "unicode": "\\u2804",
+        "binary": [0,0,1,0,0,0]
+    },
+    "coma_decimal": {
+        "dots": [2],
+        "unicode": "\\u2802",
+        "binary": [0,1,0,0,0,0]
+    }
+}
