@@ -168,8 +168,10 @@ void processCommand(String command) {
 
     Serial.println("OK");
   } else if (command == "XLIMIT") {
+    Serial.print("OK: ");
     Serial.println(MAX_POS_X);
   } else if (command == "YLIMIT") {
+    Serial.print("OK: ");
     Serial.println(MAX_POS_Y);
   } else {
     Serial.println("E: CNF");

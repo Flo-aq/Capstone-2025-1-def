@@ -1,19 +1,23 @@
-from Controllers.DeviceManager import DeviceManager
+# Imports de la biblioteca estándar
+import os
+import time
+from datetime import datetime
+from os.path import join
+
+import cv2
+
+from BrailleToCoordinates import BrailleToCoordinates
 from Camera.Camera import Camera
 from Camera.CameraBox import CameraBox
-from Paper import Paper
-from ImageClasses.PaperSectionImage import PaperSectionImage
-from ImageClasses.PaperImage import PaperImage
-from ReferenceSystem import ReferenceSystem
+from Controllers.DeviceManager import DeviceManager
 from Functions.AuxFunctions import load_json
+from GCodeGenerator import GCodeGenerator
 from ImageClasses.CornerImage import CornerImage
-from os.path import join
-import os
-import cv2
-from datetime import datetime
-import numpy as np
-import matplotlib.pyplot as plt
-import time
+from ImageClasses.PaperSectionImage import PaperSectionImage
+from ImageClasses.PaperRecompositionImage import PaperRecompositionImage
+from Paper import Paper
+from ReferenceSystem import ReferenceSystem
+from Translator import Translator
 
 
 class Main:
@@ -28,6 +32,12 @@ class Main:
 
         self.camera_box = CameraBox(0, 0, self.camera, self.reference_system)
 
+        self.translator = Translator()
+        
+        self.braille_converter = BrailleToCoordinates(self.config)
+        
+        self.g_code_generator = GCodeGenerator
+        
         self.top_left_img = None
         self.bottom_right_img = None
 
@@ -51,7 +61,6 @@ class Main:
             return None
         else:
             response_lines = response.split("\n")
-            print(response_lines)
             for line in response_lines:
               if line.startswith("E"):
                 print(f"Error moving camera box: {line.split(' ')[1]}")
@@ -65,9 +74,7 @@ class Main:
     
     def move_to_position(self, x_mm, y_mm):
         distance_x = x_mm - self.camera_box.x
-        print(distance_x)
         distance_y = y_mm - self.camera_box.y
-        print(distance_y)
         
         self.move_specific_distance(distance_x, distance_y)
         
@@ -79,7 +86,6 @@ class Main:
             self.move_axis_arduino(1, distance_y_mm)
     
     def move_to_corner(self, corner_name):
-        print(self.camera_box.get_corner_coordinates())
         corner_coords = self.camera_box.get_specific_corner_coordinates(corner_name)
         if corner_coords:
             print(f"Moving to {corner_name} corner at coordinates: {corner_coords}")
@@ -144,7 +150,7 @@ class Main:
 
         return corner_imgs
 
-    def first_phase(self):
+    def flow(self):
         print("Starting first phase - homing...")
         homing_success = self.homing(set_custom_origin=True)
         if not homing_success:
@@ -189,9 +195,8 @@ class Main:
         self.reference_system.set_limits(x_limit, y_limit)
         print(f"Reference system limits: X={self.reference_system.max_x}, Y={self.reference_system.max_y}")
         
-        print(self.reference_system.max_x, self.reference_system.max_y)
     
-        self.top_left_img = CornerImage(image=None, camera=self.camera, parameters=self.config)
+        self.top_left_img = CornerImage(image=None, camera_box=self.camera_box, parameters=self.config)
         self.top_left_img.capture_and_process()
 
         if self.top_left_img.image is None:
@@ -199,7 +204,7 @@ class Main:
             return False         
         
         self.move_to_corner("bottom_right")
-        self.bottom_right_img = CornerImage(image=None,camera=self.camera,parameters=self.config)
+        self.bottom_right_img = CornerImage(image=None,camera_box=self.camera_box,parameters=self.config)
         self.bottom_right_img.capture_and_process()
 
         if self.bottom_right_img.image is None:
@@ -215,12 +220,12 @@ class Main:
             self.move_to_position(pos[0], pos[1])
             img = PaperSectionImage(
                 image=None,
-                camera=self.camera
+                camera_box=self.camera_box
             )
             img.capture_and_process()
             self.imgs.append(img)
         
-        # self.paper.image = PaperImage(camera=self.camera,
+        # self.paper.image = PaperRecompositionImage(camera_box=self.camera_box,
         # images=self.imgs,
         # parameters=self.config)
         # print("Creating paper image...")
@@ -230,15 +235,9 @@ class Main:
         # print("Text captured and translated.")
         # print("Generating braille coordinates...")
         # self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
-        # print(f"Total pages: {self.braille_converter.pages}")
 
 if __name__ == "__main__":
     main = Main()
     
-    success = main.first_phase()
-    if success:
-        print("First phase completed successfully.")
-    else:
-        print("First phase failed.")
-    
+    success = main.flow()
     

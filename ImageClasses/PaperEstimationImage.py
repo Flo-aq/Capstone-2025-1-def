@@ -1,11 +1,18 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime
+from os.path import join
+from matplotlib.patches import Rectangle, Polygon
+import os
+import time
+import cv2
+
 from Functions.SecondModule.FirstCaseFunctions import create_lines_from_extremes, get_vertical_and_horizontal_lines, reconstruct_bottom_polygon, reconstruct_top_polygon
 from Functions.SecondModule.FourthCaseFunctions import find_polygon_from_two_unclean_intersections
 from Functions.SecondModule.SecondCaseFunctions import reconstruct_polygon_from_paralell_lines
 from Functions.SecondModule.SecondModuleFunctions import calculate_photo_positions_diagonal, extend_all_lines_and_find_corners, find_polygon_from_intersections, group_lines_by_angle, standardize_polygon
 from Functions.SecondModule.ThirdCaseFunctions import find_polygon_from_two_clean_intersections
 from ImageClasses.Image import Image
-import time
 
 class PaperEstimationImage(Image):
     """
@@ -13,7 +20,7 @@ class PaperEstimationImage(Image):
     to detect polygons and calculate optimal camera positions for capture.
     Inherits from the base Image class.
     """
-    def __init__(self, camera, top_image, bottom_image, parameters=None):
+    def __init__(self, camera_box, top_image, bottom_image, parameters=None):
         """
         Initialize ImageFunction2 with required images and parameters.
 
@@ -26,7 +33,7 @@ class PaperEstimationImage(Image):
         Raises:
             ValueError: If parameters or any image is None
         """
-        super().__init__(function=2, image=None, camera=camera)
+        super().__init__(function=2, image=None, camera_box=camera_box)
         if parameters is None:
             raise ValueError("Parameters cannot be None")
         if top_image is None:
@@ -193,6 +200,8 @@ class PaperEstimationImage(Image):
         print(f"Caso detectado: {self.case}")
         print("--------------------\n")
         print("Polygon of paper detected")
+        
+        self.visualize_coverage_strategies()
     
     def calculate_capture_photos_positions(self):
         """
@@ -227,3 +236,198 @@ class PaperEstimationImage(Image):
             print("Using second diagonal strategy")
             return positions2
     
+    def save_composite_visualization(self):
+        # Crear directorio si no existe
+        save_dir = "FlowImages/PaperEstimationImages"
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Crear timestamp para el nombre de archivo
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = join(save_dir, f"CompositeImage_{timestamp}.png")
+        
+        # Configurar estilo de visualización
+        plt.style.use('dark_background')
+        plt.figure(figsize=(16, 12))
+        
+        # Crear la figura con subplots
+        fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+        fig.patch.set_facecolor('#121212')
+        
+        # Mostrar imagen superior
+        axs[0, 0].imshow(cv2.cvtColor(self.top_image.image, cv2.COLOR_BGR2RGB))
+        axs[0, 0].set_title("Top Left Image", fontsize=14)
+        axs[0, 0].axis('off')
+        
+        # Mostrar imagen inferior
+        axs[0, 1].imshow(cv2.cvtColor(self.bottom_image.image, cv2.COLOR_BGR2RGB))
+        axs[0, 1].set_title("Bottom Right Image", fontsize=14)
+        axs[0, 1].axis('off')
+        
+        # Mostrar canvas blanco con posiciones marcadas
+        composite_viz = np.ones((self.height_px, self.width_px, 3), dtype=np.uint8) * 255
+        
+        h_top, w_top = self.top_image.image.shape[:2]
+        h_bottom, w_bottom = self.bottom_image.image.shape[:2]
+        
+        # Dibujar rectángulos para mostrar dónde se ubicarán las imágenes
+        top_rect = cv2.rectangle(composite_viz.copy(), (0, 0), (w_top, h_top), (210, 105, 30), 2)
+        bottom_rect = cv2.rectangle(top_rect, 
+                                  (self.width_px - w_bottom, self.height_px - h_bottom), 
+                                  (self.width_px, self.height_px), 
+                                  (30, 144, 255), 10)
+        
+        axs[1, 0].imshow(cv2.cvtColor(bottom_rect, cv2.COLOR_BGR2RGB))
+        axs[1, 0].set_title("Images Placement", fontsize=14)
+        axs[1, 0].axis('off')
+        
+        # Mostrar la imagen compuesta final
+        axs[1, 1].imshow(cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB))
+        axs[1, 1].set_title("Final Composite Image", fontsize=14)
+        axs[1, 1].axis('off')
+        
+        # Guardar la figura
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        plt.savefig(filename, facecolor=fig.get_facecolor(), dpi=150)
+        plt.close()
+
+    def save_polygon_visualization(self):
+        if len(self.polygon) == 0:
+            print("No polygon detected to visualize")
+            return
+        
+        # Crear directorio si no existe
+        save_dir = "FlowImages/PaperEstimationImages"
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Crear timestamp para el nombre de archivo
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = join(save_dir, f"PolygonDetection_{timestamp}.png")
+        
+        # Configurar estilo de visualización
+        plt.style.use('dark_background')
+        
+        # Crear la figura
+        fig, ax = plt.subplots(figsize=(16, 12))
+        fig.patch.set_facecolor('#121212')
+        
+        # Mostrar la imagen compuesta
+        ax.imshow(cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB))
+        
+        # Dibujar el polígono
+        polygon_points = self.polygon.reshape(-1, 2)
+        ax.add_patch(Polygon(polygon_points, fill=False, edgecolor='#f96927', linewidth=10))
+        
+        # Dibujar los vértices
+        ax.scatter(polygon_points[:, 0], polygon_points[:, 1], color='#eb443b', s=100)
+        
+        # Etiquetar los vértices
+        for i, (x, y) in enumerate(polygon_points):
+            ax.annotate(f"P{i}", (x, y), xytext=(5, 5), textcoords='offset points', fontsize=12, weight='bold')
+        
+        # Añadir título e información
+        ax.set_title(f"Polygon Detection - Case: {self.case}", fontsize=18)
+        # Desactivar los ejes
+        ax.axis('off')
+        
+        # Guardar la figura
+        plt.tight_layout()
+        plt.savefig(filename, facecolor=fig.get_facecolor(), dpi=150)
+        plt.close()
+
+    def visualize_coverage_strategies(self):
+        """
+        Visualiza las dos estrategias de cobertura y las guarda en un archivo.
+        """
+        if len(self.polygon) == 0:
+            print("No polygon detected to visualize coverage")
+            return
+            
+        # Crear directorio si no existe
+        save_dir = "FlowImages/PaperEstimationImages"
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Crear timestamp para el nombre de archivo
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = join(save_dir, f"CoverageStrategies_{timestamp}.png")
+        
+        # Parámetros para calcular posiciones (copiar de calculate_capture_photos_positions)
+        fov_width = self.camera.fov_h_px
+        fov_height = self.camera.fov_v_px
+        margin_px = int(self.parameters["camera_positioning_margin"] / self.camera.mm_per_px_h)
+        
+        # Calcular posiciones para ambas estrategias
+        positions1, coverage1 = calculate_photo_positions_diagonal(
+            self.polygon, fov_width, fov_height, margin_px, "topleft-bottomright")
+        positions2, coverage2 = calculate_photo_positions_diagonal(
+            self.polygon, fov_width, fov_height, margin_px, "topright-bottomleft")
+        
+        # Configurar la figura
+        plt.style.use('dark_background')
+        fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+        fig.patch.set_facecolor('#121212')
+        
+        # Preparar datos comunes
+        polygon_points = self.polygon.reshape(-1, 2)
+        min_x = np.min(polygon_points[:, 0])
+        max_x = np.max(polygon_points[:, 0])
+        min_y = np.min(polygon_points[:, 1])
+        max_y = np.max(polygon_points[:, 1])
+        width = max_x - min_x
+        height = max_y - min_y
+        
+        # Función para crear el gráfico de cobertura
+        def create_coverage_plot(ax, positions, coverage, strategy_name):
+            # Crear máscara para el polígono
+            mask = np.zeros((int(height)+1, int(width)+1))
+            polygon_for_mask = polygon_points - [min_x, min_y]
+            cv2.fillPoly(mask, [polygon_for_mask.astype(np.int32)], 1)
+            
+            # Crear máscara para las áreas cubiertas
+            covered_mask = np.zeros_like(mask)
+            for x, y in positions:
+                x_norm, y_norm = x - min_x, y - min_y
+                x1 = max(0, int(x_norm - fov_width/2))
+                y1 = max(0, int(y_norm - fov_height/2))
+                x2 = min(mask.shape[1], int(x_norm + fov_width/2))
+                y2 = min(mask.shape[0], int(y_norm + fov_height/2))
+                covered_mask[y1:y2, x1:x2] = 1
+            
+            # Mostrar áreas cubiertas y no cubiertas
+            uncovered = np.logical_and(mask, np.logical_not(covered_mask))
+            covered = np.logical_and(mask, covered_mask)
+            
+            # Áreas no cubiertas (en rojo)
+            ax.imshow(uncovered, origin='lower', extent=[min_x, max_x, min_y, max_y],
+                    cmap=plt.cm.colors.ListedColormap(['white', '#FF0000']),
+                    alpha=0.3, vmin=0, vmax=1)
+            
+            # Áreas cubiertas (en verde)
+            ax.imshow(covered, origin='lower', extent=[min_x, max_x, min_y, max_y],
+                    cmap=plt.cm.colors.ListedColormap(['white', '#00FF00']),
+                    alpha=0.3, vmin=0, vmax=1)
+            
+            # Dibujar el polígono
+            ax.add_patch(Polygon(polygon_points, fill=False, edgecolor='#43005c', linewidth=10))
+            
+            # Dibujar rectángulos para cada posición de la cámara
+            for i, (x, y) in enumerate(positions):
+                rect = Rectangle((x - fov_width/2, y - fov_height/2),
+                              fov_width, fov_height,
+                              fill=False, edgecolor='#95005d', linestyle='--', linewidth=10, alpha=0.7)
+                ax.add_patch(rect)
+                ax.scatter(x, y, s=100, color=f'#eb443b', zorder=5)
+            
+            # Configurar el aspecto del gráfico
+            ax.set_xlim(min_x - 100, max_x + 100)
+            ax.set_ylim(min_y - 100, max_y + 100)
+            ax.grid(True, color='gray', alpha=0.3)
+            ax.set_title(f"{strategy_name}\n{len(positions)} positions, {coverage:.1f}% coverage", fontsize=16)
+        
+        # Crear los dos gráficos
+        create_coverage_plot(axs[0], positions1, coverage1 * 100, "Strategy 1: Top-Left to Bottom-Right")
+        create_coverage_plot(axs[1], positions2, coverage2 * 100, "Strategy 2: Top-Right to Bottom-Left")
+
+        # Guardar la figura
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        plt.savefig(filename, facecolor=fig.get_facecolor(), dpi=150)
+        plt.close()
