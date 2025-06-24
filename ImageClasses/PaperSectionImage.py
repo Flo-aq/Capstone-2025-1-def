@@ -15,8 +15,11 @@ class PaperSectionImage(Image):
             image (ndarray): Input image to process
         """
         super().__init__(function=3, image=image, camera_box=camera_box)
-        self.corners_positions_mm = self.camera.get_fov_corners()
+        self.corners_positions_mm = self.camera.get_fov_corners(camera_box)
+        print(f"Corner positions in mm: {self.corners_positions_mm}")
+        
         self.corners_positions_px = self.calculate_corners_positions()
+        print(f"Corner positions in pixels: {self.corners_positions_px}")
 
     def calculate_corners_positions(self):
         """
@@ -27,8 +30,8 @@ class PaperSectionImage(Image):
         """
         pos = {}
         for corner, position in self.corners_positions_mm.items():
-            x_px = position[0] / self.camera.mm_per_px_h
-            y_px = position[1] / self.camera.mm_per_px_v
+            x_px = position[0] / self.camera.mm_per_px_h + self.camera.fov_h_px/2
+            y_px = position[1] / self.camera.mm_per_px_v + self.camera.fov_v_px/2
             pos[corner] = (int(x_px), int(y_px))
         return pos
     

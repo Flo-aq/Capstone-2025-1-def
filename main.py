@@ -229,9 +229,9 @@ class Main:
         self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config)
         print("Creating paper image...")
         self.paper.image.create_image()
-        # self.paper.get_text()
-        # self.paper.translate_text()
-        # print("Text captured and translated.")
+        self.paper.get_text()
+        self.paper.translate_text()
+        print("Text captured and translated.")
         # print("Generating braille coordinates...")
         # self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
 

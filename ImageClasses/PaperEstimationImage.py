@@ -205,6 +205,7 @@ class PaperEstimationImage(Image):
         create_time = time.time() - start_time
         start_time = time.time()
         self.polygon = self.get_polygon(width_mm, height_mm)
+        print(f"Case detected: {self.case}")
         self.save_polygon_visualization()
         polygon_time = time.time() - start_time
         print(f"Tiempo de creación de imagen compuesta: {create_time:.3f} segundos")
@@ -262,13 +263,14 @@ class PaperEstimationImage(Image):
             list: List of (x_mm, y_mm) tuples in millimeter coordinates
         """
         mm_positions = []
-        x_offset = (self.width_px / 2) * self.camera.mm_per_px_h
-        y_offset = (self.height_px / 2) * self.camera.mm_per_px_v
+        x_offset = self.camera.fov_h_mm / 2
+        y_offset = self.camera.fov_v_mm / 2
+        print(positions)
         for x, y in positions:
             
             # Convert to millimeters
-            x_mm = x_px * self.camera.mm_per_px_h - x_offset
-            y_mm = y_px * self.camera.mm_per_px_v - y_offset
+            x_mm = x * self.camera.mm_per_px_h - x_offset
+            y_mm = y * self.camera.mm_per_px_v - y_offset
             
             mm_positions.append((x_mm, y_mm))
         return mm_positions
@@ -459,7 +461,7 @@ class PaperEstimationImage(Image):
             ax.set_ylim(min_y - 100, max_y + 100)
             ax.grid(True, color='gray', alpha=0.3)
             ax.set_title(f"{strategy_name}\n{len(positions)} positions, {coverage:.1f}% coverage", fontsize=16)
-        
+            ax.invert_yaxis()
         # Crear los dos gráficos
         create_coverage_plot(axs[0], positions1, coverage1 * 100, "Strategy 1: Top-Left to Bottom-Right")
         create_coverage_plot(axs[1], positions2, coverage2 * 100, "Strategy 2: Top-Right to Bottom-Left")
