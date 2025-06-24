@@ -36,7 +36,7 @@ class PaperImage():
         Raises:
             RuntimeError: If Tesseract OCR is not properly installed
         """
-        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+        pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
         osd = pytesseract.image_to_osd(self.image, output_type=pytesseract.Output.DICT)
         rotation = osd["rotate"]
         return rotation == 180

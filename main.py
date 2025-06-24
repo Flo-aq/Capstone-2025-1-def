@@ -211,9 +211,10 @@ class Main:
             print("E: Failed to capure bottom right image")
         
         
-        self.paper = Paper(self.config, self.camera, self.translator)
+        self.paper = Paper(self.config, self.camera_box, self.translator)
         self.paper.set_position(self.top_left_img, self.bottom_right_img)
-
+        self.paper.calculate_capture_positions()
+        
         for i, pos in enumerate(self.paper.capture_positions):
             print(f"Moving camera to capture position {pos}...")
             print(f"Capturing image {i + 1}...")
@@ -225,11 +226,9 @@ class Main:
             img.capture_and_process()
             self.imgs.append(img)
         
-        # self.paper.image = PaperRecompositionImage(camera_box=self.camera_box,
-        # images=self.imgs,
-        # parameters=self.config)
-        # print("Creating paper image...")
-        # self.paper.image.create_image()
+        self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config)
+        print("Creating paper image...")
+        self.paper.image.create_image()
         # self.paper.get_text()
         # self.paper.translate_text()
         # print("Text captured and translated.")

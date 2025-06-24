@@ -403,7 +403,7 @@ def create_coverage_masks(polygon_points, positions, bounds, fov_width, fov_heig
     return mask, covered_mask
 
 
-def calculate_photo_positions_diagonal(polygon, fov_width, fov_height, margin_px=54, corners=None):
+def calculate_photo_positions_diagonal(polygon, fov_width, fov_height, margin_px=10, corners=None):
     """
     Calculate optimal camera positions for complete polygon coverage.
 
