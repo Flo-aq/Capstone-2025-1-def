@@ -43,7 +43,9 @@ class PaperEstimationImage(Image):
         self.parameters = parameters["second_module"]
         self.polygon = None
         self.top_image = top_image
+        self.top_image.image = cv2.rotate(self.top_image.image, cv2.ROTATE_180)
         self.bottom_image = bottom_image
+        self.bottom_image.image = cv2.rotate(self.bottom_image.image, cv2.ROTATE_180)
         self.case = 0
         self.grouped_lines = None
         self.unique_corners = None
@@ -55,6 +57,15 @@ class PaperEstimationImage(Image):
         Places images at opposite corners of a white canvas.
         """
         print("Creating composite image...")
+        
+        if len(self.top_image.image.shape) > 2 and self.top_image.image.shape[2] == 4:
+            print("Convirtiendo imagen superior de 4 canales a 3 canales...")
+            self.top_image.image = cv2.cvtColor(self.top_image.image, cv2.COLOR_BGRA2BGR)
+            
+        if len(self.bottom_image.image.shape) > 2 and self.bottom_image.image.shape[2] == 4:
+            print("Convirtiendo imagen inferior de 4 canales a 3 canales...")
+            self.bottom_image.image = cv2.cvtColor(self.bottom_image.image, cv2.COLOR_BGRA2BGR)
+            
         composite = np.ones((self.height_px, self.width_px, 3), dtype=np.uint8) * 255
         
         h_top, w_top = self.top_image.image.shape[:2]
@@ -190,9 +201,11 @@ class PaperEstimationImage(Image):
         """
         start_time = time.time()
         self.create_image()
+        self.save_composite_visualization()
         create_time = time.time() - start_time
         start_time = time.time()
         self.polygon = self.get_polygon(width_mm, height_mm)
+        self.save_polygon_visualization()
         polygon_time = time.time() - start_time
         print(f"Tiempo de creación de imagen compuesta: {create_time:.3f} segundos")
         print(f"Tiempo de detección de polígono: {polygon_time:.3f} segundos")
@@ -231,10 +244,32 @@ class PaperEstimationImage(Image):
         print("Deciding which diagonal strategy to use")
         if len(positions1) < len(positions2) or (len(positions1) == len(positions2) and coverage1 > coverage2):
             print("Using first diagonal strategy")
+            positions1 = self.convert_positions_to_mm(positions1)
             return positions1
         else:
             print("Using second diagonal strategy")
+            positions2 = self.convert_positions_to_mm(positions2)
             return positions2
+    
+    def convert_positions_to_mm(self, positions):
+        """
+        Convert camera positions from pixel coordinates to millimeter coordinates.
+
+        Args:
+            positions (list): List of (x, y) tuples in pixel coordinates
+
+        Returns:
+            list: List of (x_mm, y_mm) tuples in millimeter coordinates
+        """
+        mm_positions = []
+        for x, y in positions:
+            
+            # Convert to millimeters
+            x_mm = x * self.camera.mm_per_px_h
+            y_mm = y * self.camera.mm_per_px_v
+            
+            mm_positions.append((x_mm, y_mm))
+        return mm_positions
     
     def save_composite_visualization(self):
         # Crear directorio si no existe

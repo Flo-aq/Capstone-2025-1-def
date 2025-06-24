@@ -46,10 +46,9 @@
   },
   "third_module": {
     "tesseract_path": [
-      "C:\\",
-      "Program Files",
-      "Tesseract-OCR",
-      "tesseract.exe"
+      "/usr",
+      "bin",
+      "tesseract"
     ],
     "config": "--oem 3 --psm 3 -l spa"
   },

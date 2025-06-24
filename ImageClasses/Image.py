@@ -24,8 +24,8 @@ class Image:
             self.height_px = self.camera.fov_v_px
             self.width_px = self.camera.fov_h_px
         else:
-            self.height_mm = self.camera.reference_system.range_of_motion_height_mm + self.camera.fov_v_mm
-            self.width_mm = self.camera.reference_system.range_of_motion_width_mm+ self.camera.fov_h_mm
+            self.height_mm = self.camera_box.reference_system.range_of_motion_height_mm + self.camera.fov_v_mm
+            self.width_mm = self.camera_box.reference_system.range_of_motion_width_mm+ self.camera.fov_h_mm
             self.height_px = int(self.height_mm / self.camera.mm_per_px_v)
             self.width_px = int(self.width_mm/ self.camera.mm_per_px_h)
 
