@@ -39,14 +39,13 @@ class PaperRecompositionImage(Image):
         for idx, img in enumerate(self.images):
             if img.image is None:
                 img.process()
-
             y_start = img.corners_positions_px['top_left'][1]
             x_start = img.corners_positions_px['top_left'][0]
             y_end = y_start + img.height_px
             x_end = x_start + img.width_px
             print(
                 f"Placing image {idx + 1} at position: ({x_start}, {y_start}) to ({x_end}, {y_end})")
-            current_panorama[y_start:y_end, x_start:x_end] = img.image
+            current_panorama[y_start:y_end, x_start:x_end] = img.image[:img.height_px, :img.width_px]
 
         print("Composite image created.")
         self.image = current_panorama
@@ -69,7 +68,7 @@ class PaperRecompositionImage(Image):
             raise ValueError("No image to process")
         if None in corners_px.values():
             raise ValueError("Corners positions cannot be None")
-
+        print(corners_px)
         corners = np.float32([
             corners_px['top_left'],
             corners_px['top_right'],
