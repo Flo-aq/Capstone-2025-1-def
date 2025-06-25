@@ -179,13 +179,45 @@ void processCommand(String command) {
   } else if (command.startsWith("TOFY ")) {
     float distance = command.substring(5).toFloat();
     moveWithPID(distance, STEP_Y, DIR_Y, tofSensorY, ENDSTOP_Y, false);
+  } else if (command.startsWith("PIDX ")) {
+    float distance = command.substring(5).toFloat();
+    moveWithPID(distance, STEP_X, DIR_X, tofSensorX, ENDSTOP_X, true);
+  } else if (command.startsWith("PIDY ")) {
+    float distance = command.substring(5).toFloat();
+    moveWithPID(distance, STEP_Y, DIR_Y, tofSensorY, ENDSTOP_Y, false);
+  } else if (command == "TOFX") {
+    // Solo leer el sensor X
+    if (!sensorTofXOk) {
+      Serial.println("E: TOF X not initialized");
+      return;
+    }
+    int distance = readAverageTofDistance(tofSensorX);
+    if (distance < 0) {
+      Serial.println("E: Invalid TOF X reading");
+    } else {
+      Serial.print("OK: ");
+      Serial.println(distance);
+    }
+  } else if (command == "TOFY") {
+    // Solo leer el sensor Y
+    if (!sensorTofYOk) {
+      Serial.println("E: TOF Y not initialized");
+      return;
+    }
+    int distance = readAverageTofDistance(tofSensorY);
+    if (distance < 0) {
+      Serial.println("E: Invalid TOF Y reading");
+    } else {
+      Serial.print("OK: ");
+      Serial.println(distance);
+    }
   } else if (command == "INITTOF") {
     if (initTofSensors()) {
       Serial.println("OK: TOF sensors initialized");
     } else {
       Serial.println("E: TOF initialization failed");
     }
-  } else {
+  }  else {
     Serial.println("E: CNF");
   }
 }

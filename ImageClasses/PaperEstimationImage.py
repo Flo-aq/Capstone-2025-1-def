@@ -90,7 +90,7 @@ class PaperEstimationImage(Image):
         w_bottom = self.bottom_image.width_px
         bottom_offset = [
             self.width_px - w_bottom,
-            self.width_px - h_bottom
+            self.height_px - h_bottom
         ]
 
         self.top_image.get_lines()
