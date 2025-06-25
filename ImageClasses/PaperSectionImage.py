@@ -16,7 +16,7 @@ class PaperSectionImage(Image):
             image (ndarray): Input image to process
         """
         super().__init__(function=3, image=image, camera_box=camera_box)
-        self.corners_positions_mm = self.camera.get_fov_corners()
+        self.corners_positions_mm = self.camera.get_fov_corners(self.camera_box)
         self.corners_positions_px = self.calculate_corners_positions()
         self.mask = None
         self.red_polygons_contours = None
@@ -43,6 +43,8 @@ class PaperSectionImage(Image):
         """
         if self.image is None:
             raise ValueError("No image to process")
+        if len(self.image.shape) == 3 and self.image.shape[2] == 4:
+          self.image = cv2.cvtColor(self.image, cv2.COLOR_BGRA2BGR)
         rotated = cv2.rotate(self.image, cv2.ROTATE_180)
         self.original_img = rotated.copy()
         self.create_mask(rotated)
@@ -58,14 +60,11 @@ class PaperSectionImage(Image):
     
     def create_mask(self, img):
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        lower_red1 = np.array([0, 100, 100])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([160, 100, 100])
-        upper_red2 = np.array([179, 255, 255])
+        lower_blue = np.array([100, 100, 100])
+        upper_blue = np.array([130, 255, 255])
+        self.mask = cv2.inRange(hsv, lower_blue, upper_blue)
         
-        mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-        mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        self.mask = cv2.bitwise_or(mask1, mask2)
-    
+        cv2.imwrite("mask_debug.png", self.mask)
+        
     def get_red_polygons_contours(self):
         self.red_polygons_contours, _ = cv2.findContours(self.mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
