@@ -13,21 +13,21 @@ def first_module_process_image(image, kernel_size, sigma):
     Returns:
         numpy.ndarray: Binary image ready for edge detection
     """
+    if len(image.shape) == 3 and image.shape[2] == 4:
+        image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
     rotated = cv2.rotate(image, cv2.ROTATE_180)
+    
+    print(image.shape)
     img_flat = rotated.reshape(-1, 3)
     darkest_idx = np.argmin(img_flat.sum(axis=1))
     darkest_color = img_flat[darkest_idx]
     result = rotated.copy()
     
     hsv = cv2.cvtColor(rotated, cv2.COLOR_BGR2HSV)
-    lower_red1 = np.array([0, 100, 100])
-    upper_red1 = np.array([10, 255, 255])
-    lower_red2 = np.array([160, 100, 100])
-    upper_red2 = np.array([179, 255, 255])
+    lower_blue = np.array([100, 100, 100])
+    upper_blue = np.array([130, 255, 255])
     
-    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
-    mask = cv2.bitwise_or(mask1, mask2)
+    mask = cv2.inRange(hsv, lower_blue, upper_blue)
         
     result[mask == 255] = darkest_color
     

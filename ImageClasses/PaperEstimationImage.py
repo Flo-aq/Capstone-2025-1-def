@@ -246,11 +246,11 @@ class PaperEstimationImage(Image):
         if len(positions1) < len(positions2) or (len(positions1) == len(positions2) and coverage1 > coverage2):
             print("Using first diagonal strategy")
             positions1 = self.convert_positions_to_mm(positions1)
-            return positions1
+            return positions1, 0
         else:
             print("Using second diagonal strategy")
             positions2 = self.convert_positions_to_mm(positions2)
-            return positions2
+            return positions2, 1
     
     def convert_positions_to_mm(self, positions):
         """
