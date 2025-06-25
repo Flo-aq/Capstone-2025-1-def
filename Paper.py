@@ -69,7 +69,6 @@ class Paper:
         self.composed_image = PaperEstimationImage(self.camera_box, top_image, bottom_image, self.image_config)
         self.composed_image.process(self.width_mm, self.height_mm)
         self.polygon = self.composed_image.polygon
-        print("Polygon detected: ", self.polygon)
         self.update_corners()
         
     def update_corners(self):
@@ -97,7 +96,7 @@ class Paper:
             y_mm = y_px * self.camera.photo_mm_per_px_v
             self.corners_mm[corner] = (x_mm, y_mm)
             self.corners_px[corner] = (x_px, y_px)
-          
+            
         print("Position of paper: ", self.corners_mm)
         print("Position of corners in pixels: ", self.corners_px)
         return
@@ -115,6 +114,7 @@ class Paper:
     
     def get_text(self):
         print("Extracting and rotating image...")
+        self.update_corners()
         image = self.image.extract_and_rotate(self.corners_px, self.width_mm, self.height_mm)
         self.paper_image = PaperImage(image, self.image_config, self.width_mm, self.height_mm)
         print("Image extracted and rotated.")
