@@ -45,11 +45,11 @@ class PaperRecompositionImage(Image):
           if img.image is not None:
               filename = os.path.join(save_dir, f"img_{idx+1}.png")
               # Si la imagen es binaria o de un canal, guardar como está
-              if len(img.image.shape) == 2:
-                  cv2.imwrite(filename, img.image)
+              if len(img.originial_img.shape) == 2:
+                  cv2.imwrite(filename, img.original_img)
               # Si es BGR, convertir a RGB para visualización estándar
-              elif len(img.image.shape) == 3 and img.image.shape[2] == 3:
-                  cv2.imwrite(filename, cv2.cvtColor(img.image, cv2.COLOR_BGR2RGB))
+              elif len(img.original_img.shape) == 3 and img.original_img.shape[2] == 3:
+                  cv2.imwrite(filename, cv2.cvtColor(img.original_img, cv2.COLOR_BGR2RGB))
               print(f"Imagen {idx+1} guardada en: {filename}")
     
         panorama = self.images[0].original_img
