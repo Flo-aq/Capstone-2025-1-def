@@ -45,7 +45,7 @@ class PaperRecompositionImage(Image):
           if img.image is not None:
               filename = os.path.join(save_dir, f"img_{idx+1}.png")
               # Si la imagen es binaria o de un canal, guardar como está
-              if len(img.originial_img.shape) == 2:
+              if len(img.original_img.shape) == 2:
                   cv2.imwrite(filename, img.original_img)
               # Si es BGR, convertir a RGB para visualización estándar
               elif len(img.original_img.shape) == 3 and img.original_img.shape[2] == 3:
