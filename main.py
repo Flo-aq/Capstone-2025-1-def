@@ -214,28 +214,28 @@ class Main:
         self.paper = Paper(self.config, self.camera_box, self.translator)
         self.paper.set_position(self.top_left_img, self.bottom_right_img)
         index = self.paper.calculate_capture_positions()
-        if index == 0:
-          start = "TL"
-        else:
-          start = "TR"
+        # if index == 0:
+        #   start = "TL"
+        # else:
+        #   start = "TR"
         
-        for i, pos in enumerate(self.paper.capture_positions):
-            print(f"Moving camera to capture position {pos}...")
-            print(f"Capturing image {i + 1}...")
-            self.move_to_position(pos[0], pos[1])
-            img = PaperSectionImage(
-                image=None,
-                camera_box=self.camera_box
-            )
-            img.capture_and_process()
-            self.imgs.append(img)
+        # for i, pos in enumerate(self.paper.capture_positions):
+        #     print(f"Moving camera to capture position {pos}...")
+        #     print(f"Capturing image {i + 1}...")
+        #     self.move_to_position(pos[0], pos[1])
+        #     img = PaperSectionImage(
+        #         image=None,
+        #         camera_box=self.camera_box
+        #     )
+        #     img.capture_and_process()
+        #     self.imgs.append(img)
         
-        self.paper.image = PaperRecompositionImage(start=start, camera_box=self.camera_box, images=self.imgs, parameters=self.config)
-        print("Creating paper image...")
-        self.paper.image.create_image()
-        self.paper.get_text()
-        self.paper.translate_text()
-        print("Text captured and translated.")
+        # self.paper.image = PaperRecompositionImage(start=start, camera_box=self.camera_box, images=self.imgs, parameters=self.config)
+        # print("Creating paper image...")
+        # self.paper.image.create_image()
+        # self.paper.get_text()
+        # self.paper.translate_text()
+        # print("Text captured and translated.")
         # print("Generating braille coordinates...")
         # self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
 

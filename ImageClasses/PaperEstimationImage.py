@@ -10,7 +10,7 @@ import cv2
 from Functions.SecondModule.FirstCaseFunctions import create_lines_from_extremes, get_vertical_and_horizontal_lines, reconstruct_bottom_polygon, reconstruct_top_polygon
 from Functions.SecondModule.FourthCaseFunctions import find_polygon_from_two_unclean_intersections
 from Functions.SecondModule.SecondCaseFunctions import reconstruct_polygon_from_paralell_lines
-from Functions.SecondModule.SecondModuleFunctions import calculate_photo_positions_diagonal, extend_all_lines_and_find_corners, find_polygon_from_intersections, group_lines_by_angle, standardize_polygon
+from Functions.SecondModule.SecondModuleFunctions import calculate_photo_positions_diagonal, calculate_photo_positions_diagonal_with_overlap, extend_all_lines_and_find_corners, find_polygon_from_intersections, group_lines_by_angle, standardize_polygon
 from Functions.SecondModule.ThirdCaseFunctions import find_polygon_from_two_clean_intersections
 from ImageClasses.Image import Image
 
@@ -232,16 +232,32 @@ class PaperEstimationImage(Image):
         """
         if len(self.polygon) == 0:
             return []
+          
+#         positions, coverage = calculate_photo_positions_diagonal_with_overlap(
+#         polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, 
+#         corners="topleft-bottomright", border_mm=30, min_overlap=0.3
+#         )
             
         fov_width = self.camera.fov_h_px
         fov_height = self.camera.fov_v_px
-        margin_px = int(self.parameters["camera_positioning_margin"] / self.camera.mm_per_px_h)  # 5mm margin
+        mm_to_px_h = self.camera.mm_per_px_h
+        mm_to_px_v = self.camera.mm_per_px_v
+        
         print("Trying first diagonal strategy to get camera positions")
-        positions1, coverage1 = calculate_photo_positions_diagonal(
-            self.polygon, fov_width, fov_height, margin_px, "topleft-bottomright")
+        positions1, coverage1 = calculate_photo_positions_diagonal_with_overlap(
+            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v,
+            corners="topleft-bottomright")
         print("Trying second diagonal strategy to get camera positions")
-        positions2, coverage2 = calculate_photo_positions_diagonal(
-            self.polygon, fov_width, fov_height, margin_px, "topright-bottomleft")
+        positions2, coverage2 = calculate_photo_positions_diagonal_with_overlap(
+            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v,
+            corners="topright-bottomleft")
+        # margin_px = int(self.parameters["camera_positioning_margin"] / self.camera.mm_per_px_h)  # 5mm margin
+        # print("Trying first diagonal strategy to get camera positions")
+        # positions1, coverage1 = calculate_photo_positions_diagonal(
+        #     self.polygon, fov_width, fov_height, margin_px, "topleft-bottomright")
+        # print("Trying second diagonal strategy to get camera positions")
+        # positions2, coverage2 = calculate_photo_positions_diagonal(
+        #     self.polygon, fov_width, fov_height, margin_px, "topright-bottomleft")
         print("Deciding which diagonal strategy to use")
         if len(positions1) < len(positions2) or (len(positions1) == len(positions2) and coverage1 > coverage2):
             print("Using first diagonal strategy")
@@ -375,36 +391,31 @@ class PaperEstimationImage(Image):
 
     def visualize_coverage_strategies(self):
         """
-        Visualiza las dos estrategias de cobertura y las guarda en un archivo.
+        Visualiza la cobertura acumulada paso a paso, mostrando en cada subplot
+        el polígono y la suma de las áreas cubiertas por las imágenes capturadas hasta ese punto.
         """
         if len(self.polygon) == 0:
             print("No polygon detected to visualize coverage")
             return
-            
+
         # Crear directorio si no existe
         save_dir = "FlowImages/PaperEstimationImages"
         os.makedirs(save_dir, exist_ok=True)
-        
+
         # Crear timestamp para el nombre de archivo
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = join(save_dir, f"CoverageStrategies_{timestamp}.png")
-        
+        filename = join(save_dir, f"CoverageStepByStep_{timestamp}.png")
+
         # Parámetros para calcular posiciones (copiar de calculate_capture_photos_positions)
         fov_width = self.camera.fov_h_px
         fov_height = self.camera.fov_v_px
         margin_px = int(self.parameters["camera_positioning_margin"] / self.camera.mm_per_px_h)
-        
-        # Calcular posiciones para ambas estrategias
-        positions1, coverage1 = calculate_photo_positions_diagonal(
-            self.polygon, fov_width, fov_height, margin_px, "topleft-bottomright")
-        positions2, coverage2 = calculate_photo_positions_diagonal(
-            self.polygon, fov_width, fov_height, margin_px, "topright-bottomleft")
-        
-        # Configurar la figura
-        plt.style.use('dark_background')
-        fig, axs = plt.subplots(1, 2, figsize=(20, 10))
-        fig.patch.set_facecolor('#121212')
-        
+
+        # Usar una estrategia (puedes cambiar a la que prefieras)
+        positions, _ = calculate_photo_positions_diagonal(
+            self.polygon, fov_width, fov_height, margin_px, "topleft-bottomright"
+        )
+
         # Preparar datos comunes
         polygon_points = self.polygon.reshape(-1, 2)
         min_x = np.min(polygon_points[:, 0])
@@ -413,60 +424,70 @@ class PaperEstimationImage(Image):
         max_y = np.max(polygon_points[:, 1])
         width = max_x - min_x
         height = max_y - min_y
-        
-        # Función para crear el gráfico de cobertura
-        def create_coverage_plot(ax, positions, coverage, strategy_name):
-            # Crear máscara para el polígono
-            mask = np.zeros((int(height)+1, int(width)+1))
-            polygon_for_mask = polygon_points - [min_x, min_y]
-            cv2.fillPoly(mask, [polygon_for_mask.astype(np.int32)], 1)
-            
-            # Crear máscara para las áreas cubiertas
-            covered_mask = np.zeros_like(mask)
-            for x, y in positions:
-                x_norm, y_norm = x - min_x, y - min_y
-                x1 = max(0, int(x_norm - fov_width/2))
-                y1 = max(0, int(y_norm - fov_height/2))
-                x2 = min(mask.shape[1], int(x_norm + fov_width/2))
-                y2 = min(mask.shape[0], int(y_norm + fov_height/2))
-                covered_mask[y1:y2, x1:x2] = 1
-            
+
+        n = len(positions)
+        ncols = 4
+        nrows = int(np.ceil(n / ncols))
+
+        plt.style.use('dark_background')
+        fig, axs = plt.subplots(nrows, ncols, figsize=(5 * ncols, 5 * nrows))
+        fig.patch.set_facecolor('#121212')
+        axs = axs.flatten()
+
+        # Crear máscara para el polígono
+        mask = np.zeros((int(height)+1, int(width)+1))
+        polygon_for_mask = polygon_points - [min_x, min_y]
+        cv2.fillPoly(mask, [polygon_for_mask.astype(np.int32)], 1)
+
+        covered_mask = np.zeros_like(mask)
+
+        for i in range(n):
+            ax = axs[i]
+            # Agregar la nueva área cubierta
+            x, y = positions[i]
+            x_norm, y_norm = x - min_x, y - min_y
+            x1 = max(0, int(x_norm - fov_width/2))
+            y1 = max(0, int(y_norm - fov_height/2))
+            x2 = min(mask.shape[1], int(x_norm + fov_width/2))
+            y2 = min(mask.shape[0], int(y_norm + fov_height/2))
+            covered_mask[y1:y2, x1:x2] = 1
+
             # Mostrar áreas cubiertas y no cubiertas
             uncovered = np.logical_and(mask, np.logical_not(covered_mask))
             covered = np.logical_and(mask, covered_mask)
-            
+
             # Áreas no cubiertas (en rojo)
             ax.imshow(uncovered, origin='lower', extent=[min_x, max_x, min_y, max_y],
-                    cmap=plt.cm.colors.ListedColormap(['white', '#FF0000']),
-                    alpha=0.3, vmin=0, vmax=1)
-            
+                      cmap=plt.cm.colors.ListedColormap(['white', '#FF0000']),
+                      alpha=0.3, vmin=0, vmax=1)
+
             # Áreas cubiertas (en verde)
             ax.imshow(covered, origin='lower', extent=[min_x, max_x, min_y, max_y],
-                    cmap=plt.cm.colors.ListedColormap(['white', '#00FF00']),
-                    alpha=0.3, vmin=0, vmax=1)
-            
+                      cmap=plt.cm.colors.ListedColormap(['white', '#00FF00']),
+                      alpha=0.3, vmin=0, vmax=1)
+
             # Dibujar el polígono
-            ax.add_patch(Polygon(polygon_points, fill=False, edgecolor='#43005c', linewidth=10))
-            
-            # Dibujar rectángulos para cada posición de la cámara
-            for i, (x, y) in enumerate(positions):
-                rect = Rectangle((x - fov_width/2, y - fov_height/2),
-                              fov_width, fov_height,
-                              fill=False, edgecolor='#95005d', linestyle='--', linewidth=10, alpha=0.7)
+            ax.add_patch(Polygon(polygon_points, fill=False, edgecolor='#43005c', linewidth=4))
+
+            # Dibujar los rectángulos de las imágenes capturadas hasta ahora
+            for j in range(i+1):
+                xj, yj = positions[j]
+                rect = Rectangle((xj - fov_width/2, yj - fov_height/2),
+                                fov_width, fov_height,
+                                fill=False, edgecolor='#95005d', linestyle='--', linewidth=2, alpha=0.7)
                 ax.add_patch(rect)
-                ax.scatter(x, y, s=100, color=f'#eb443b', zorder=5)
-            
-            # Configurar el aspecto del gráfico
+                ax.scatter(xj, yj, s=60, color=f'#eb443b', zorder=5)
+
             ax.set_xlim(min_x - 100, max_x + 100)
             ax.set_ylim(min_y - 100, max_y + 100)
             ax.grid(True, color='gray', alpha=0.3)
-            ax.set_title(f"{strategy_name}\n{len(positions)} positions, {coverage:.1f}% coverage", fontsize=16)
+            ax.set_title(f"Captura {i+1}/{n}", fontsize=14)
             ax.invert_yaxis()
-        # Crear los dos gráficos
-        create_coverage_plot(axs[0], positions1, coverage1 * 100, "Strategy 1: Top-Left to Bottom-Right")
-        create_coverage_plot(axs[1], positions2, coverage2 * 100, "Strategy 2: Top-Right to Bottom-Left")
 
-        # Guardar la figura
+        # Ocultar subplots vacíos
+        for i in range(n, len(axs)):
+            axs[i].axis('off')
+
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         plt.savefig(filename, facecolor=fig.get_facecolor(), dpi=150)
         plt.close()
