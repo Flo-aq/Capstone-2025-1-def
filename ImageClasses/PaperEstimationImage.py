@@ -245,11 +245,11 @@ class PaperEstimationImage(Image):
         
         print("Trying first diagonal strategy to get camera positions")
         positions1, coverage1 = calculate_photo_positions_diagonal_with_overlap(
-            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v,
+            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, self.height_px, self.width_px,
             corners="topleft-bottomright")
         print("Trying second diagonal strategy to get camera positions")
         positions2, coverage2 = calculate_photo_positions_diagonal_with_overlap(
-            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v,
+            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, self.height_px, self.width_px,
             corners="topright-bottomleft")
         # margin_px = int(self.parameters["camera_positioning_margin"] / self.camera.mm_per_px_h)  # 5mm margin
         # print("Trying first diagonal strategy to get camera positions")
@@ -406,16 +406,15 @@ class PaperEstimationImage(Image):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = join(save_dir, f"CoverageStepByStep_{timestamp}.png")
 
-        # Parámetros para calcular posiciones (copiar de calculate_capture_photos_positions)
         fov_width = self.camera.fov_h_px
         fov_height = self.camera.fov_v_px
-        margin_px = int(self.parameters["camera_positioning_margin"] / self.camera.mm_per_px_h)
-
-        # Usar una estrategia (puedes cambiar a la que prefieras)
-        positions, _ = calculate_photo_positions_diagonal(
-            self.polygon, fov_width, fov_height, margin_px, "topleft-bottomright"
-        )
-
+        mm_to_px_h = self.camera.mm_per_px_h
+        mm_to_px_v = self.camera.mm_per_px_v
+        
+        positions, coverage = calculate_photo_positions_diagonal_with_overlap(
+            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v,
+            corners="topright-bottomleft")
+        
         # Preparar datos comunes
         polygon_points = self.polygon.reshape(-1, 2)
         min_x = np.min(polygon_points[:, 0])

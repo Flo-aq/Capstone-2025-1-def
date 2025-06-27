@@ -479,28 +479,16 @@ def calculate_photo_positions_diagonal(polygon, fov_width, fov_height, margin_px
 
 ###################################
 
-def calculate_photo_positions_diagonal_with_overlap(polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, 
-                                                   corners=None, border_mm=30, min_overlap=0.3):
+def calculate_photo_positions_diagonal_with_overlap(polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, height, width, corners=None, border_mm=30, min_overlap=0.3):
     """
-    Calculate optimal camera positions ensuring 100% coverage with ordered sequence for stitching.
-    
-    Args:
-        polygon (numpy.ndarray): Points defining the polygon
-        fov_width (float): Camera field of view width
-        fov_height (float): Camera field of view height
-        mm_to_px_h (float): Millimeters to pixels horizontal conversion
-        mm_to_px_v (float): Millimeters to pixels vertical conversion
-        corners (str): Starting corner strategy ("topleft-bottomright" or "topright-bottomleft")
-        border_mm (float): Border margin in millimeters
-        min_overlap (float): Minimum overlap ratio required (0.3 = 30%)
-        
-    Returns:
-        tuple: (ordered list of positions, coverage percentage - always 100%)
+    Calcula posiciones de cámara: primero en esquinas opuestas, luego cubre áreas no cubiertas
+    alineando el borde del FOV con el borde de la bounding box del área no cubierta.
+    Si no se cumple el overlap, prueba dos posiciones desplazadas en Y.
     """
     polygon_points = polygon.reshape(-1, 2)
     border_px_h = border_mm * mm_to_px_h
     border_px_v = border_mm * mm_to_px_v
-    
+
     bounds = {
         'min_x': np.min(polygon_points[:, 0]) + border_px_h,
         'max_x': np.max(polygon_points[:, 0]) - border_px_h,
@@ -509,220 +497,140 @@ def calculate_photo_positions_diagonal_with_overlap(polygon, fov_width, fov_heig
         'width': np.max(polygon_points[:, 0]) - np.min(polygon_points[:, 0]) - 2 * border_px_h,
         'height': np.max(polygon_points[:, 1]) - np.min(polygon_points[:, 1]) - 2 * border_px_v
     }
+
+    positions = []
+    # 1. Esquinas opuestas
+    if corners == "topleft-bottomright":
+        positions.append((bounds['min_x'] + fov_width/2, bounds['min_y'] + fov_height/2))
+        positions.append((bounds['max_x'] - fov_width/2, bounds['max_y'] - fov_height/2))
+    else:  # "topright-bottomleft"
+        positions.append((bounds['max_x'] - fov_width/2, bounds['min_y'] + fov_height/2))
+        positions.append((bounds['min_x'] + fov_width/2, bounds['max_y'] - fov_height/2))
+
+    max_iterations = 10
+    iteration = 0
+
+    while iteration < max_iterations:
+        # Crear máscaras
+        mask, covered_mask = create_coverage_masks(
+            polygon_points, positions, bounds, fov_width, fov_height)
+        uncovered = np.logical_and(mask, np.logical_not(covered_mask))
+        
+        if uncovered:
+          uncovered_uint8 = (uncovered.astype(np.uint8)) * 255
+          contours, _ = cv2.findContours(uncovered_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+          uncovered_areas_and_contours = [[cv2.contourArea(contour), contour] for contour in contours if cv2.contourArea(contour) > 0]
+          img_center_x, img_center_y = width / 2, height / 2
+          if uncovered_areas_and_contours:
+            for area, contour in uncovered_areas_and_contours:
+                x, y, w, h = cv2.boundingRect(contour)
+                bbox_center_x = x + w / 2
+                #Area a la izq
+                if bbox_center_x < img_center_x:
+                    new_x = x - fov_width/2
+                    new_y = y
+                else:
+                    new_x = x + fov_width/2
+                    new_y = y
+                  
+
+def get_starting_position(bounds, corners, fov_width, fov_height):
+    """Obtener la posición inicial según la esquina especificada"""
+    if corners == "topleft-bottomright":
+        return (bounds['min_x'] + fov_width/2, bounds['min_y'] + fov_height/2)
+    else:  # "topright-bottomleft"
+        return (bounds['max_x'] - fov_width/2, bounds['min_y'] + fov_height/2)
+
+def find_next_position_sequential(positions, bounds, fov_width, fov_height, step_x, step_y, 
+                                direction, row, corners, polygon_points, min_overlap):
+    """Encontrar la siguiente posición en la secuencia boustrophedon"""
     
-    # Si el área completa cabe en una sola imagen
-    if bounds['width'] <= fov_width and bounds['height'] <= fov_height:
-        return [(bounds['min_x'] + bounds['width']/2, bounds['min_y'] + bounds['height']/2)], 100.0
+    if not positions:
+        return None
     
-    # Generar grid de posiciones con overlap garantizado
-    step_x = fov_width * (1 - min_overlap)
-    step_y = fov_height * (1 - min_overlap)
+    last_position = positions[-1]
     
-    # Calcular número de imágenes necesarias en cada dirección
-    n_cols = int(np.ceil(bounds['width'] / step_x))
-    n_rows = int(np.ceil(bounds['height'] / step_y))
+    # Calcular posición candidata basada en la dirección actual
+    if row == 0:  # Primera fila
+        if direction == 'right':
+            candidate_x = last_position[0] + step_x
+            candidate_y = last_position[1]
+        else:  # direction == 'left'
+            candidate_x = last_position[0] - step_x
+            candidate_y = last_position[1]
+    else:  # Filas siguientes
+        if direction == 'right':
+            # Buscar el inicio de la nueva fila (lado izquierdo)
+            candidate_x = bounds['min_x'] + fov_width/2
+            candidate_y = bounds['min_y'] + fov_height/2 + row * step_y
+        else:  # direction == 'left'
+            # Buscar el inicio de la nueva fila (lado derecho)
+            candidate_x = bounds['max_x'] - fov_width/2
+            candidate_y = bounds['min_y'] + fov_height/2 + row * step_y
+        
+        # Si ya estamos en la fila, avanzar horizontalmente
+        if len(positions) > 1 and abs(positions[-1][1] - candidate_y) < step_y/2:
+            if direction == 'right':
+                candidate_x = last_position[0] + step_x
+                candidate_y = last_position[1]
+            else:
+                candidate_x = last_position[0] - step_x
+                candidate_y = last_position[1]
     
-    # Ajustar el step para distribución uniforme
-    if n_cols > 1:
-        step_x = (bounds['width'] - fov_width) / (n_cols - 1)
-    if n_rows > 1:
-        step_y = (bounds['height'] - fov_height) / (n_rows - 1)
+    candidate_position = (candidate_x, candidate_y)
     
-    # Generar todas las posiciones posibles
-    all_positions = []
-    for row in range(n_rows):
-        for col in range(n_cols):
-            x = bounds['min_x'] + fov_width/2 + col * step_x
-            y = bounds['min_y'] + fov_height/2 + row * step_y
-            all_positions.append((x, y, row, col))
     
-    # Filtrar posiciones que están dentro del polígono
-    valid_positions = []
-    for pos in all_positions:
-        if is_position_in_polygon(pos[:2], polygon_points, fov_width, fov_height):
-            valid_positions.append(pos)
+    # Verificar si la posición está dentro de los límites
+    if not is_position_within_bounds(candidate_position, bounds, fov_width, fov_height):
+        return None
     
-    if not valid_positions:
-        return [], 0.0
+    # Verificar si está dentro del polígono
+    if not is_position_in_polygon(candidate_position, polygon_points, fov_width, fov_height):
+        return None
     
-    # Ordenar posiciones según el patrón de barrido
-    ordered_positions = order_positions_for_stitching(valid_positions, corners)
+    # Verificar que tenga overlap suficiente con las imágenes anteriores
+    if not has_sufficient_overlap_with_previous(candidate_position, positions, fov_width, fov_height, min_overlap):
+        return None
     
-    # Verificar y ajustar para garantizar 100% cobertura
-    ordered_positions = ensure_complete_coverage(
-        ordered_positions, polygon_points, bounds, fov_width, fov_height, min_overlap
-    )
-    
-    return [(pos[0], pos[1]) for pos in ordered_positions], 100.0
+    return candidate_position
+
+def is_position_within_bounds(position, bounds, fov_width, fov_height):
+    """Verificar si una posición está dentro de los límites del área"""
+    return (bounds['min_x'] + fov_width/2 <= position[0] <= bounds['max_x'] - fov_width/2 and
+            bounds['min_y'] + fov_height/2 <= position[1] <= bounds['max_y'] - fov_height/2)
 
 def is_position_in_polygon(position, polygon_points, fov_width, fov_height):
-    """Verificar si una posición de cámara cubre área dentro del polígono"""
+    """Verificar si una posición de cámara cubre área significativa dentro del polígono"""
     # Verificar el centro
     if cv2.pointPolygonTest(polygon_points.astype(np.int32), position, False) >= 0:
         return True
     
-    # Verificar las esquinas del FOV
-    corners = [
-        (position[0] - fov_width/2, position[1] - fov_height/2),
-        (position[0] + fov_width/2, position[1] - fov_height/2),
-        (position[0] + fov_width/2, position[1] + fov_height/2),
-        (position[0] - fov_width/2, position[1] + fov_height/2)
+    # Verificar múltiples puntos dentro del FOV
+    test_points = [
+        (position[0], position[1]),  # centro
+        (position[0] - fov_width/4, position[1] - fov_height/4),
+        (position[0] + fov_width/4, position[1] - fov_height/4),
+        (position[0] + fov_width/4, position[1] + fov_height/4),
+        (position[0] - fov_width/4, position[1] + fov_height/4)
     ]
     
-    for corner in corners:
-        if cv2.pointPolygonTest(polygon_points.astype(np.int32), corner, False) >= 0:
-            return True
+    points_inside = sum(1 for point in test_points 
+                       if cv2.pointPolygonTest(polygon_points.astype(np.int32), point, False) >= 0)
     
-    return False
+    # Aceptar si al menos 2 puntos están dentro del polígono
+    return points_inside >= 2
 
-def order_positions_for_stitching(positions, corners):
-    """Ordenar posiciones en patrón boustrophedon (ida y vuelta por filas)"""
-    if not positions:
-        return []
+def has_sufficient_overlap_with_previous(candidate_position, previous_positions, fov_width, fov_height, min_overlap):
+    """Verificar si una posición candidata tiene overlap suficiente con las posiciones anteriores"""
+    if not previous_positions:
+        return True
     
-    # Convertir a array para facilitar manipulación
-    pos_array = np.array(positions)
-    
-    # Ordenar por filas primero
-    rows = sorted(set(pos_array[:, 2]))
-    sorted_positions = []
-    
-    if corners == "topleft-bottomright":
-        # Patrón: →→→→→ (izq a der)
-        #         ↓
-        #         ←←←←← (der a izq)  
-        #         ↓
-        #         →→→→→ (izq a der)
-        for i, row in enumerate(rows):
-            row_positions = pos_array[pos_array[:, 2] == row]
-            if i % 2 == 0:  # Filas pares: izquierda a derecha
-                row_positions = row_positions[row_positions[:, 3].argsort()]
-            else:  # Filas impares: derecha a izquierda
-                row_positions = row_positions[row_positions[:, 3].argsort()[::-1]]
-            sorted_positions.extend(row_positions.tolist())
-            
-    else:  # "topright-bottomleft"
-        # Patrón: ←←←←← (der a izq)
-        #         ↓
-        #         →→→→→ (izq a der)
-        #         ↓
-        #         ←←←←← (der a izq)
-        for i, row in enumerate(rows):
-            row_positions = pos_array[pos_array[:, 2] == row]
-            if i % 2 == 0:  # Filas pares: derecha a izquierda
-                row_positions = row_positions[row_positions[:, 3].argsort()[::-1]]
-            else:  # Filas impares: izquierda a derecha
-                row_positions = row_positions[row_positions[:, 3].argsort()]
-            sorted_positions.extend(row_positions.tolist())
-    
-    return sorted_positions
-
-def ensure_complete_coverage(ordered_positions, polygon_points, bounds, fov_width, fov_height, min_overlap):
-    """Garantizar cobertura completa del polígono"""
-    max_iterations = 10
-    iteration = 0
-    
-    while iteration < max_iterations:
-        # Crear máscara de cobertura actual
-        coverage_mask = create_coverage_mask_from_positions(
-            ordered_positions, bounds, fov_width, fov_height
-        )
-        polygon_mask = create_polygon_mask(polygon_points, bounds)
-        
-        # Encontrar área no cubierta dentro del polígono
-        uncovered_mask = polygon_mask & ~coverage_mask
-        
-        if np.sum(uncovered_mask) == 0:
-            break  # Cobertura completa
-        
-        # Encontrar posiciones adicionales para cubrir áreas faltantes
-        additional_positions = find_additional_positions(
-            uncovered_mask, ordered_positions, bounds, fov_width, fov_height, 
-            polygon_points, min_overlap
-        )
-        
-        if not additional_positions:
-            # Si no se pueden encontrar más posiciones, expandir el grid
-            ordered_positions = expand_coverage_grid(
-                ordered_positions, bounds, fov_width, fov_height, min_overlap
-            )
-            break
-        
-        # Insertar nuevas posiciones en la secuencia óptima
-        ordered_positions = insert_positions_optimally(
-            ordered_positions, additional_positions, fov_width, fov_height
-        )
-        
-        iteration += 1
-    
-    return ordered_positions
-
-def create_coverage_mask_from_positions(positions, bounds, fov_width, fov_height):
-    """Crear máscara de cobertura desde lista de posiciones"""
-    mask = np.zeros((int(bounds['height']) + 1, int(bounds['width']) + 1), dtype=bool)
-    
-    for pos in positions:
-        # Calcular rectángulo de cobertura
-        x1 = int(pos[0] - fov_width/2 - (bounds['min_x'] - bounds['width']/2))
-        y1 = int(pos[1] - fov_height/2 - (bounds['min_y'] - bounds['height']/2))
-        x2 = int(pos[0] + fov_width/2 - (bounds['min_x'] - bounds['width']/2))
-        y2 = int(pos[1] + fov_height/2 - (bounds['min_y'] - bounds['height']/2))
-        
-        x1 = max(0, x1)
-        y1 = max(0, y1)
-        x2 = min(mask.shape[1], x2)
-        y2 = min(mask.shape[0], y2)
-        
-        if x2 > x1 and y2 > y1:
-            mask[y1:y2, x1:x2] = True
-    
-    return mask
-
-def create_polygon_mask(polygon_points, bounds):
-    """Crear máscara del polígono"""
-    mask = np.zeros((int(bounds['height']) + 1, int(bounds['width']) + 1), dtype=bool)
-    
-    # Ajustar coordenadas del polígono
-    adjusted_polygon = polygon_points.copy()
-    adjusted_polygon[:, 0] -= (bounds['min_x'] - bounds['width']/2)
-    adjusted_polygon[:, 1] -= (bounds['min_y'] - bounds['height']/2)
-    
-    cv2.fillPoly(mask, [adjusted_polygon.astype(np.int32)], True)
-    return mask
-
-def find_additional_positions(uncovered_mask, existing_positions, bounds, fov_width, fov_height, 
-                            polygon_points, min_overlap):
-    """Encontrar posiciones adicionales para cubrir áreas no cubiertas"""
-    additional_positions = []
-    
-    # Encontrar centros de áreas no cubiertas
-    contours, _ = cv2.findContours(uncovered_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    for contour in contours:
-        if cv2.contourArea(contour) < (fov_width * fov_height * 0.1):  # Ignorar áreas muy pequeñas
-            continue
-            
-        # Encontrar centro del área no cubierta
-        M = cv2.moments(contour)
-        if M["m00"] != 0:
-            cx = int(M["m10"] / M["m00"]) + (bounds['min_x'] - bounds['width']/2)
-            cy = int(M["m01"] / M["m00"]) + (bounds['min_y'] - bounds['height']/2)
-            
-            candidate_pos = (cx, cy, -1, -1)  # -1 indica posición adicional
-            
-            # Verificar si está en polígono y tiene overlap suficiente
-            if (is_position_in_polygon((cx, cy), polygon_points, fov_width, fov_height) and
-                has_sufficient_overlap_with_sequence(candidate_pos, existing_positions, fov_width, fov_height, min_overlap)):
-                additional_positions.append(candidate_pos)
-    
-    return additional_positions
-
-def has_sufficient_overlap_with_sequence(candidate_pos, existing_positions, fov_width, fov_height, min_overlap):
-    """Verificar si una posición tiene overlap suficiente con la secuencia existente"""
-    for existing_pos in existing_positions:
-        overlap_ratio = calculate_overlap_area(candidate_pos[:2], existing_pos[:2], fov_width, fov_height)
+    # Debe tener overlap mínimo con al menos una imagen anterior
+    for prev_pos in previous_positions:
+        overlap_ratio = calculate_overlap_area(candidate_position, prev_pos, fov_width, fov_height)
         if overlap_ratio >= min_overlap:
             return True
+    
     return False
 
 def calculate_overlap_area(pos1, pos2, fov_width, fov_height):
@@ -740,52 +648,117 @@ def calculate_overlap_area(pos1, pos2, fov_width, fov_height):
     
     return overlap_area / image_area if image_area > 0 else 0
 
-def insert_positions_optimally(ordered_positions, additional_positions, fov_width, fov_height):
-    """Insertar posiciones adicionales en la secuencia óptima"""
-    if not additional_positions:
-        return ordered_positions
+def is_coverage_complete(positions, polygon_points, bounds, fov_width, fov_height):
+    """Verificar si las posiciones actuales proporcionan cobertura completa"""
+    if not positions:
+        return False
     
-    result = ordered_positions.copy()
+    # Crear máscara de cobertura
+    coverage_mask = create_coverage_mask_from_positions(positions, bounds, fov_width, fov_height)
+    polygon_mask = create_polygon_mask(polygon_points, bounds)
     
-    for add_pos in additional_positions:
-        best_insert_idx = 0
-        min_distance = float('inf')
-        
-        # Encontrar la mejor posición para insertar
-        for i in range(len(result) + 1):
-            total_distance = 0
-            
-            if i > 0:
-                total_distance += np.sqrt((add_pos[0] - result[i-1][0])**2 + (add_pos[1] - result[i-1][1])**2)
-            if i < len(result):
-                total_distance += np.sqrt((add_pos[0] - result[i][0])**2 + (add_pos[1] - result[i][1])**2)
-            
-            if total_distance < min_distance:
-                min_distance = total_distance
-                best_insert_idx = i
-        
-        result.insert(best_insert_idx, add_pos)
+    # Verificar si hay área no cubierta
+    uncovered_area = np.sum(polygon_mask & ~coverage_mask)
+    total_polygon_area = np.sum(polygon_mask)
     
-    return result
+    # Considerar cobertura completa si menos del 1% queda sin cubrir
+    print(f"Uncovered area: {uncovered_area}, Total polygon area: {total_polygon_area}")
+    coverage_ratio = 1 - (uncovered_area / total_polygon_area) if total_polygon_area > 0 else 1
+    return coverage_ratio >= 1
 
-def expand_coverage_grid(positions, bounds, fov_width, fov_height, min_overlap):
-    """Expandir el grid de cobertura si es necesario"""
-    # Como último recurso, añadir posiciones en los bordes
-    expanded_positions = positions.copy()
+def ensure_complete_coverage_sequential(positions, polygon_points, bounds, fov_width, fov_height, min_overlap):
+    """Asegurar cobertura completa añadiendo posiciones adicionales si es necesario"""
+    max_additional = 20  # Máximo número de posiciones adicionales
+    added = 0
     
-    # Añadir posiciones adicionales en los bordes
-    border_positions = [
-        (bounds['min_x'] + fov_width/4, bounds['min_y'] + fov_height/2, -1, -1),
-        (bounds['max_x'] - fov_width/4, bounds['min_y'] + fov_height/2, -1, -1),
-        (bounds['min_x'] + fov_width/2, bounds['min_y'] + fov_height/4, -1, -1),
-        (bounds['min_x'] + fov_width/2, bounds['max_y'] - fov_height/4, -1, -1),
-    ]
+    while added < max_additional:
+        if is_coverage_complete(positions, polygon_points, bounds, fov_width, fov_height):
+            break
+        
+        # Encontrar área más grande no cubierta
+        coverage_mask = create_coverage_mask_from_positions(positions, bounds, fov_width, fov_height)
+        polygon_mask = create_polygon_mask(polygon_points, bounds)
+        uncovered_mask = polygon_mask & ~coverage_mask
+        
+        if np.sum(uncovered_mask) == 0:
+            break
+        
+        # Encontrar centro del área no cubierta más grande
+        best_position = find_best_additional_position(
+            uncovered_mask, positions, bounds, fov_width, fov_height, polygon_points, min_overlap
+        )
+        
+        if best_position is None:
+            break
+        
+        positions.append(best_position)
+        added += 1
     
-    for border_pos in border_positions:
-        if border_pos not in expanded_positions:
-            expanded_positions.append(border_pos)
+    return positions
+
+def find_best_additional_position(uncovered_mask, existing_positions, bounds, fov_width, fov_height, 
+                                polygon_points, min_overlap):
+    """Encontrar la mejor posición adicional para cubrir área no cubierta"""
+    # Encontrar contornos de áreas no cubiertas
+    contours, _ = cv2.findContours(uncovered_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    return expanded_positions
+    best_position = None
+    best_score = 0
+    
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < (fov_width * fov_height * 0.05):  # Ignorar áreas muy pequeñas
+            continue
+        
+        # Encontrar centro del área
+        M = cv2.moments(contour)
+        if M["m00"] != 0:
+            cx = int(M["m10"] / M["m00"]) + (bounds['min_x'] - bounds['width']/2)
+            cy = int(M["m01"] / M["m00"]) + (bounds['min_y'] - bounds['height']/2)
+            
+            candidate_pos = (cx, cy)
+            
+            # Verificar validez de la posición
+            if (is_position_within_bounds(candidate_pos, bounds, fov_width, fov_height) and
+                is_position_in_polygon(candidate_pos, polygon_points, fov_width, fov_height) and
+                has_sufficient_overlap_with_previous(candidate_pos, existing_positions, fov_width, fov_height, min_overlap)):
+                
+                if area > best_score:
+                    best_score = area
+                    best_position = candidate_pos
+    
+    return best_position
+
+def create_coverage_mask_from_positions(positions, bounds, fov_width, fov_height):
+    """Crear máscara de cobertura desde lista de posiciones"""
+    mask = np.zeros((int(bounds['height']) + 1, int(bounds['width']) + 1), dtype=bool)
+    
+    for pos in positions:
+        x1 = int(pos[0] - fov_width/2 - (bounds['min_x'] - bounds['width']/2))
+        y1 = int(pos[1] - fov_height/2 - (bounds['min_y'] - bounds['height']/2))
+        x2 = int(pos[0] + fov_width/2 - (bounds['min_x'] - bounds['width']/2))
+        y2 = int(pos[1] + fov_height/2 - (bounds['min_y'] - bounds['height']/2))
+        
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(mask.shape[1], x2)
+        y2 = min(mask.shape[0], y2)
+        
+        if x2 > x1 and y2 > y1:
+            mask[y1:y2, x1:x2] = True
+    
+    return mask
+
+def create_polygon_mask(polygon_points, bounds):
+    """Crear máscara del polígono"""
+    mask = np.zeros((int(bounds['height']) + 1, int(bounds['width']) + 1), dtype=np.uint8)
+    
+    adjusted_polygon = polygon_points.astype(np.float64).copy()
+    adjusted_polygon[:, 0] -= (bounds['min_x'] - bounds['width']/2)
+    adjusted_polygon[:, 1] -= (bounds['min_y'] - bounds['height']/2)
+    
+    cv2.fillPoly(mask, [adjusted_polygon.astype(np.int32)], True)
+    return mask
 
 def validate_stitching_sequence(positions, fov_width, fov_height, min_overlap):
     """Validar que la secuencia de posiciones es válida para stitching"""
@@ -796,8 +769,8 @@ def validate_stitching_sequence(positions, fov_width, fov_height, min_overlap):
     total_overlaps = 0
     
     for i in range(len(positions) - 1):
-        current_pos = positions[i][:2] if len(positions[i]) > 2 else positions[i]
-        next_pos = positions[i + 1][:2] if len(positions[i + 1]) > 2 else positions[i + 1]
+        current_pos = positions[i]
+        next_pos = positions[i + 1]
         
         overlap = calculate_overlap_area(current_pos, next_pos, fov_width, fov_height)
         total_overlaps += overlap
@@ -817,14 +790,29 @@ def validate_stitching_sequence(positions, fov_width, fov_height, min_overlap):
     
     return all_valid, summary, validation_results
 
+def print_stitching_pattern(positions, fov_width, fov_height):
+    """Imprimir el patrón de stitching para visualización"""
+    if not positions:
+        print("No hay posiciones para mostrar")
+        return
+    
+    print("\n=== PATRÓN DE STITCHING SECUENCIAL ===")
+    print("Secuencia de captura:")
+    
+    for i, pos in enumerate(positions, 1):
+        print(f"  {i:2d}. X:{pos[0]:7.1f}, Y:{pos[1]:7.1f}")
+        
+        if i < len(positions):
+            next_pos = positions[i]
+            overlap = calculate_overlap_area(pos, next_pos, fov_width, fov_height)
+            distance = np.sqrt((pos[0] - next_pos[0])**2 + (pos[1] - next_pos[1])**2)
+            print(f"      ↓ Overlap: {overlap:.1%}, Distancia: {distance:.1f}px")
+    
+    print(f"\nTotal de imágenes: {len(positions)}")
 
 # Función auxiliar para mantener compatibilidad
 def create_coverage_masks(polygon_points, positions, bounds, fov_width, fov_height):
     """Función de compatibilidad con el código existente"""
     polygon_mask = create_polygon_mask(polygon_points, bounds)
-    
-    # Convertir posiciones si es necesario
-    position_coords = [(pos[0], pos[1]) if len(pos) > 2 else pos for pos in positions]
-    coverage_mask = create_coverage_mask_from_positions(position_coords, bounds, fov_width, fov_height)
-    
+    coverage_mask = create_coverage_mask_from_positions(positions, bounds, fov_width, fov_height)
     return polygon_mask, coverage_mask
