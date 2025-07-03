@@ -9,6 +9,7 @@ import cv2
 
 from Functions.SecondModule.FirstCaseFunctions import create_lines_from_extremes, get_vertical_and_horizontal_lines, reconstruct_bottom_polygon, reconstruct_top_polygon
 from Functions.SecondModule.FourthCaseFunctions import find_polygon_from_two_unclean_intersections
+from Functions.SecondModule.PhotoPositionsFunctions import calculate_photo_positions_with_tree
 from Functions.SecondModule.SecondCaseFunctions import reconstruct_polygon_from_paralell_lines
 from Functions.SecondModule.SecondModuleFunctions import calculate_photo_positions_diagonal, calculate_photo_positions_diagonal_with_overlap, extend_all_lines_and_find_corners, find_polygon_from_intersections, group_lines_by_angle, standardize_polygon
 from Functions.SecondModule.ThirdCaseFunctions import find_polygon_from_two_clean_intersections
@@ -242,15 +243,21 @@ class PaperEstimationImage(Image):
         fov_height = self.camera.fov_v_px
         mm_to_px_h = self.camera.mm_per_px_h
         mm_to_px_v = self.camera.mm_per_px_v
-        
-        print("Trying first diagonal strategy to get camera positions")
-        positions1, coverage1 = calculate_photo_positions_diagonal_with_overlap(
-            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, self.height_px, self.width_px,
-            corners="topleft-bottomright")
-        print("Trying second diagonal strategy to get camera positions")
-        positions2, coverage2 = calculate_photo_positions_diagonal_with_overlap(
-            self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, self.height_px, self.width_px,
-            corners="topright-bottomleft")
+        print("Calculating camera positions for polygon coverage")
+        coverage_positions = calculate_photo_positions_with_tree(self.polygon, fov_width, fov_height, self.height_px, self.width_px, 0.15, 3, 15)
+        if len(coverage_positions) == 0:
+            print("No camera positions found for polygon coverage")
+            return []
+        else:
+          return self.convert_positions_to_mm(coverage_positions[0])
+        # print("Trying first diagonal strategy to get camera positions")
+        # positions1, coverage1 = calculate_photo_positions_diagonal_with_overlap(
+        #     self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, self.height_px, self.width_px,
+        #     corners="topleft-bottomright")
+        # print("Trying second diagonal strategy to get camera positions")
+        # positions2, coverage2 = calculate_photo_positions_diagonal_with_overlap(
+        #     self.polygon, fov_width, fov_height, mm_to_px_h, mm_to_px_v, self.height_px, self.width_px,
+        #     corners="topright-bottomleft")
         # margin_px = int(self.parameters["camera_positioning_margin"] / self.camera.mm_per_px_h)  # 5mm margin
         # print("Trying first diagonal strategy to get camera positions")
         # positions1, coverage1 = calculate_photo_positions_diagonal(
@@ -258,15 +265,15 @@ class PaperEstimationImage(Image):
         # print("Trying second diagonal strategy to get camera positions")
         # positions2, coverage2 = calculate_photo_positions_diagonal(
         #     self.polygon, fov_width, fov_height, margin_px, "topright-bottomleft")
-        print("Deciding which diagonal strategy to use")
-        if len(positions1) < len(positions2) or (len(positions1) == len(positions2) and coverage1 > coverage2):
-            print("Using first diagonal strategy")
-            positions1 = self.convert_positions_to_mm(positions1)
-            return positions1, 0
-        else:
-            print("Using second diagonal strategy")
-            positions2 = self.convert_positions_to_mm(positions2)
-            return positions2, 1
+        # print("Deciding which diagonal strategy to use")
+        # if len(positions1) < len(positions2) or (len(positions1) == len(positions2) and coverage1 > coverage2):
+        #     print("Using first diagonal strategy")
+        #     positions1 = self.convert_positions_to_mm(positions1)
+        #     return positions1, 0
+        # else:
+        #     print("Using second diagonal strategy")
+        #     positions2 = self.convert_positions_to_mm(positions2)
+        #     return positions2, 1
     
     def convert_positions_to_mm(self, positions):
         """

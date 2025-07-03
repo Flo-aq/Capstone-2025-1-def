@@ -104,10 +104,8 @@ class Main:
         
         if set_custom_origin:
             response = self.device_manager.arduino_mega_scanner.home_and_set_origin()
-            time.sleep(1) 
         else:
             response = self.device_manager.arduino_mega_scanner.full_homing()
-            time.sleep(1) 
         if response.startswith("E:"):
             print(f"Error during homing: {response}")
             return False
@@ -157,9 +155,6 @@ class Main:
             print("E: Homing failed")
             return False
         
-        # Pausa explícita después de homing
-        time.sleep(2)
-        
         print("Getting X limit...")
         x_limit_response = self.device_manager.arduino_mega_scanner.max_limit_x()
         # No continuar hasta tener una respuesta válida
@@ -174,8 +169,6 @@ class Main:
             print("E: Failed to get X limit")
             return False
             
-        # Pausa explícita entre comandos
-        time.sleep(1)
         
         print("Getting Y limit...")
         y_limit_response = self.device_manager.arduino_mega_scanner.max_limit_y()
@@ -213,24 +206,24 @@ class Main:
         
         self.paper = Paper(self.config, self.camera_box, self.translator)
         self.paper.set_position(self.top_left_img, self.bottom_right_img)
-        index = self.paper.calculate_capture_positions()
+        self.paper.calculate_capture_positions()
         # if index == 0:
         #   start = "TL"
         # else:
         #   start = "TR"
         
-        # for i, pos in enumerate(self.paper.capture_positions):
-        #     print(f"Moving camera to capture position {pos}...")
-        #     print(f"Capturing image {i + 1}...")
-        #     self.move_to_position(pos[0], pos[1])
-        #     img = PaperSectionImage(
-        #         image=None,
-        #         camera_box=self.camera_box
-        #     )
-        #     img.capture_and_process()
-        #     self.imgs.append(img)
+        for i, pos in enumerate(self.paper.capture_positions):
+            print(f"Moving camera to capture position {pos}...")
+            print(f"Capturing image {i + 1}...")
+            self.move_to_position(pos[0], pos[1])
+            img = PaperSectionImage(
+                image=None,
+                camera_box=self.camera_box
+            )
+            img.capture_and_process()
+            self.imgs.append(img)
         
-        # self.paper.image = PaperRecompositionImage(start=start, camera_box=self.camera_box, images=self.imgs, parameters=self.config)
+        self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config)
         # print("Creating paper image...")
         # self.paper.image.create_image()
         # self.paper.get_text()

@@ -1,21 +1,24 @@
-from turtle import back
-from xml.dom.minidom import Notation
-from matplotlib.pyplot import grid
+
+from copy import copy
+from hmac import new
+from turtle import update
 import numpy as np
 from shapely import Point, unary_union
 from shapely.geometry import Polygon, box
 
 
-def order_corners_by_distance_to_edge(polygon, composite_img_width, composite_img_height):
+def order_corners_by_distance_to_edge(polygon, fov_width, fov_height, composite_img_width, composite_img_height):
     corners = list(polygon.exterior.coords)[:-1]
     ordered_corners = []
     for x, y in corners:
-        dist_left = x
-        dist_right = composite_img_width - x
-        dist_top = y
-        dist_bottom = composite_img_height - y
+        adjusted_corner = adjust_corner_for_fov_limits((x, y), fov_width, fov_height, composite_img_width, composite_img_height)
+        dist_left = adjusted_corner[0]
+        dist_right = composite_img_width - adjusted_corner[0]
+        dist_top = adjusted_corner[1]
+        dist_bottom = composite_img_height - adjusted_corner[1]
         min_dist = min(dist_left, dist_right, dist_top, dist_bottom)
-        ordered_corners.append(((x, y), min_dist))
+        ordered_corners.append(((adjusted_corner[0], adjusted_corner[1]), min_dist))
+        
     ordered_corners.sort(key=lambda tup: tup[1], reverse=True)
     return [corner for corner, _ in ordered_corners]
 
@@ -158,9 +161,62 @@ def get_candidates_from_grid(grid, polygon_geom, covered_regions, min_overlap, m
     candidates.sort(key=lambda x: x[1], reverse=True)
     return candidates[:max_candidates]
 
-def calculate_photo_positions_tree(polygon, fov_width, fov_height, composite_img_height, composite_img_width, min_overlap, max_candidates):
+def calculate_photo_positions_with_tree(polygon, fov_width, fov_height, composite_img_height, composite_img_width, min_overlap, max_candidates, max_depth):
     step = int(fov_width / 25)
     polygon_coords = [(float(point[0][0]), float(point[0][1])) for point in polygon]
     polygon_geom = Polygon(polygon_coords).buffer(0)
     
-    grid, x_positions, y_positions = create_initial_grid(polygon_geom, fov_width, 
+    grid, x_positions, y_positions = create_initial_grid(polygon_geom, fov_width, fov_height, composite_img_width, composite_img_height, step)
+    
+    corners_ordered = order_corners_by_distance_to_edge(polygon_geom, composite_img_width, composite_img_height)
+    best_initial = corners_ordered[0]
+    
+    initial_fov = create_fov_box(best_initial, fov_width, fov_height)
+    
+    exclusion_range = get_exclusion_range(x_positions, y_positions, best_initial)
+    
+    update_grid_distances_and_availability(grid, [initial_fov], step, exclusion_ranges=[exclusion_range])
+    
+    tree = [
+      {
+        'positions': [best_initial],
+        'regions': [initial_fov],
+        'depth': 1,
+        'grid_state': grid.copy()
+      }
+    ]
+    
+    all_branches = []
+    while tree:
+        current_branch = tree.pop(0)
+        positions = current_branch['positions']
+        regions = current_branch['regions']
+        depth = current_branch['depth']
+        grid_state = current_branch['grid_state']
+        
+        if depth >= max_depth:
+            return all_branches, max_depth
+                
+        candidates = get_candidates_from_grid(grid_state, polygon_geom, regions, min_overlap, max_candidates)
+        
+        for candidate_pos, weight, overlap, new_pol in candidates:
+            new_grid = copy.deepcopy(grid_state)
+            new_fov = create_fov_box(candidate_pos, (fov_width, fov_height))
+            new_regions = regions + [new_fov]
+            new_positions = positions + [candidate_pos]
+            exclusion_range = get_exclusion_range(x_positions, y_positions, candidate_pos)
+            update_grid_distances_and_availability(new_grid, new_regions, step, exclusion_ranges=[exclusion_range])
+            
+            coverage = verify_complete_coverage(polygon_geom, new_regions)
+            if coverage >= 0.998:
+                max_depth_reached = depth + 1
+                print(f"Coverage achieved at depth {max_depth_reached} with positions: {new_positions}")
+                return [new_positions]
+            
+            tree.append({
+                'positions': new_positions,
+                'regions': new_regions,
+                'depth': depth + 1,
+                'grid_state': new_grid
+            })
+            

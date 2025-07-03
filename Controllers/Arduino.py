@@ -1,5 +1,9 @@
+from curses import start_color
+from tracemalloc import start
 import serial
 import time
+import threading
+import queue
 
 
 class Arduino():
@@ -55,36 +59,54 @@ class Arduino():
 class ArduinoMegaScanner(Arduino):
     def __init__(self, baudrate=115200, port=None):
         super().__init__(baudrate, port)
-        self.type = "Arduino Uno"
-        self.command_in_progress = False
-        self.last_command_time = 0
-        self.command_timeout = 5  # segundos
-
-    def send_command(self, command):
+        self.type = "Arduino Mega"
+        self.command_queue = queue.Queue()
+        self.response_queue = queue.Queue()
+        self.communication_thread = None
+        self.running = False
+        self.lock = threading.Lock()
+        
+    def start_communication_thread(self):
+        if self.communicaction_thread is None or not self.communication_thread.is_alive():
+          self.running = True
+          self.communication_thread = threading.Thread(target=self._communication_worker)
+          self.communication_thread.daemon = True
+          self.communication_thread.start()
+          print("Communication thread started")
+    
+    def stop_communication_thread(self):
+        self.running = False
+        if self.communication_thread and self.communication_thread.is_alive():
+            self.communication_thread.join(timeout=0.5)
+            print("Communication thread stopped")
+    
+    def _communication_worker(self):
+        while self.running and self.is_connected():
+            try:
+                command = self.command_queue.get(timeout=0.5)
+                print(f"Processing command: {command}")
+                with self.lock:
+                    self._execute_command(command)
+                self.command_queue.task_done()
+            except queue.Empty:
+                pass
+            except Exception as e:
+                print(f"Error in communication thread: {e}")
+                self.response_queue.put(f"E: {str(e)}")
+    
+    def _execute_command(self, command):
         if not self.is_connected():
-            return "E: Arduino Uno not connected"
-        
-        # Verificar si el último comando es demasiado reciente
-        current_time = time.time()
-        if current_time - self.last_command_time < 0.5:  # Esperar al menos 0.5 segundos entre comandos
-            time.sleep(0.5 - (current_time - self.last_command_time))
-        
-        # Esperar explícitamente si hay un comando en progreso
-        self.wait_for_command_completion()
-            
+            self.response_queue.put("E: Arduino Mega not connected")
+            return
         try:
-            print(f"Sending command: {command}")
             self.serial.reset_input_buffer()  # Limpiar buffer antes de enviar
-            self.command_in_progress = True
-            self.last_command_time = time.time()
             
             if not command.endswith('\n'):
                 command += '\n'
-
+            
             self.serial.write(command.encode('utf-8'))
-            self.serial.flush()  # Asegurar que el comando se envía completamente
-
-            # Esperar respuesta con timeout
+            self.serial.flush() 
+            
             start_time = time.time()
             response_lines = []
             
@@ -93,54 +115,69 @@ class ArduinoMegaScanner(Arduino):
                     line = self.serial.readline().decode('utf-8').strip()
                     if line:
                         print(f"Received: {line}")
-                        response_lines.append(line)
-                        
-                        # Detectar fin de respuesta
-                        if line.startswith("OK") or line.startswith("E:"):
-                            # Esperar un poco más por si hay más líneas
-                            time.sleep(0.2)
-                            # Leer cualquier dato adicional en el buffer
-                            while self.serial.in_waiting > 0:
-                                extra_line = self.serial.readline().decode('utf-8').strip()
-                                if extra_line:
-                                    response_lines.append(extra_line)
-                            break
+                        if line == "COMMAND EXECUTED":
+                            break  # Solo usamos esto como señal de finalización
+                        else:
+                            response_lines.append(line)
                 else:
-                    time.sleep(0.1)  # Pequeña pausa si no hay datos
-
-            self.command_in_progress = False
-            
+                    time.sleep(0.1)
             if not response_lines:
-                return "E: No response from Arduino"
-            
-            print(f"Response: {response_lines}")
-            cleaned_response = []
-            for line in response_lines:
-                if line.startswith("OK: ") or line.startswith("E: "):
-                    cleaned_response.append(line)
-            return "\n".join(cleaned_response)
-              
+                self.response_queue.put("E: No response from Arduino")
+                return
+            has_error = any(line.startswith("E:") for line in response_lines)
+            if has_error:
+                # Filtramos las líneas de error
+                error_lines = [line for line in response_lines if line.startswith("E:")]
+                self.response_queue.put("\n".join(error_lines))
+            else:
+                # Si no hay errores, devolvemos todas las líneas con prefijo OK
+                self.response_queue.put("\n".join(response_lines))
         except Exception as e:
-            self.command_in_progress = False
-            return f"E: {str(e)}"
+            self.response_queue.put(f"E: {str(e)}")
     
-    def wait_for_command_completion(self, timeout=30):
-        """Espera hasta que cualquier comando previo se complete."""
-        if not self.command_in_progress:
-            return True
-            
-        print("Waiting for previous command to complete...")
-        start_time = time.time()
-        while self.command_in_progress:
-            if time.time() - start_time > timeout:
-                print("Command timeout, resetting state")
-                self.command_in_progress = False
-                self.serial.reset_input_buffer()
-                return False
-            time.sleep(0.1)
-        
-        return True
+    def start_communication_thread(self):
+        if self.communication_thread is None or not self.communication_thread.is_alive():
+            self.running = True
+            self.communication_thread = threading.Thread(target=self._communication_worker)
+            self.communication_thread.daemon = True
+            self.communication_thread.start()
+            print("Communication thread started")
 
+    def send_command(self, command, timeout=30):
+        """Send a command to Arduino and wait for response."""
+        # Start communication thread if needed
+        if self.communication_thread is None or not self.communication_thread.is_alive():
+            self.start_communication_thread()
+        
+        if not self.is_connected():
+            return "E: Arduino Mega not connected"
+        
+        print(f"Queueing command: {command}")
+        # Add command to queue
+        self.command_queue.put(command)
+        
+        # Wait for response with timeout
+        start_time = time.time()
+        while (time.time() - start_time) < timeout:
+            try:
+                response = self.response_queue.get(timeout=0.5)
+                self.response_queue.task_done()
+                return response
+            except queue.Empty:
+                # No response yet, keep waiting
+                pass
+        
+        return "E: Response timeout"
+
+    def connect(self, port=None, max_attempts=3, delay=2):
+        result = super().connect(port, max_attempts, delay)
+        if result:
+            self.start_communication_thread()
+        return result
+        
+    def disconnect(self):
+        self.stop_communication_thread()
+        super().disconnect()
     def home_x(self):
         return self.send_command("HX")
 
@@ -159,36 +196,166 @@ class ArduinoMegaScanner(Arduino):
 
         command = f"M{axis.upper()} {distance}"
         return self.send_command(command)
-    
+
     def move_with_PID(self, axis, distance):
         if axis.upper() not in ["X", "Y"]:
             return "E: Invalid axis"
 
         command = f"PID{axis.upper()} {distance}"
         return self.send_command(command)
-    
+
     def full_homing(self):
-      return self.send_command("FH")
-    
+        return self.send_command("FH")
+
     def set_origin(self):
         return self.send_command("SETORIGIN")
 
     def home_and_set_origin(self):
         return self.send_command("HOME&SET&ORIGIN")
-    
+
     def max_limit_x(self):
         """Get maximum X limit from Arduino."""
         response = self.send_command("XLIMIT")
-        if response.startswith("OK"):
-            return response.split("OK: ")[1].strip()
+        if response.startswith("OK:"):
+            return response
         return "0"
         
     def max_limit_y(self):
         """Get maximum Y limit from Arduino."""
         response = self.send_command("YLIMIT")
-        if response.startswith("OK"):
-            return response.split("OK: ")[1].strip()
+        if response.startswith("OK:"):
+            return response
         return "0"
+
+    # def send_command(self, command):
+    #     if not self.is_connected():
+    #         return "E: Arduino Uno not connected"
+        
+    #     # Verificar si el último comando es demasiado reciente
+    #     current_time = time.time()
+    #     if current_time - self.last_command_time < 0.5:  # Esperar al menos 0.5 segundos entre comandos
+    #         time.sleep(0.5 - (current_time - self.last_command_time))
+        
+    #     # Esperar explícitamente si hay un comando en progreso
+    #     self.wait_for_command_completion()
+            
+    #     try:
+    #         print(f"Sending command: {command}")
+    #         self.serial.reset_input_buffer()  # Limpiar buffer antes de enviar
+    #         self.command_in_progress = True
+    #         self.last_command_time = time.time()
+            
+    #         if not command.endswith('\n'):
+    #             command += '\n'
+
+    #         self.serial.write(command.encode('utf-8'))
+    #         self.serial.flush()  # Asegurar que el comando se envía completamente
+
+    #         # Esperar respuesta con timeout
+    #         start_time = time.time()
+    #         response_lines = []
+            
+    #         while (time.time() - start_time) < 20:  # 20 segundos de timeout
+    #             if self.serial.in_waiting > 0:
+    #                 line = self.serial.readline().decode('utf-8').strip()
+    #                 if line:
+    #                     print(f"Received: {line}")
+    #                     response_lines.append(line)
+                        
+    #                     # Detectar fin de respuesta
+    #                     if line.startswith("OK") or line.startswith("E:"):
+    #                         # Esperar un poco más por si hay más líneas
+    #                         time.sleep(0.2)
+    #                         # Leer cualquier dato adicional en el buffer
+    #                         while self.serial.in_waiting > 0:
+    #                             extra_line = self.serial.readline().decode('utf-8').strip()
+    #                             if extra_line:
+    #                                 response_lines.append(extra_line)
+    #                         break
+    #             else:
+    #                 time.sleep(0.1)  # Pequeña pausa si no hay datos
+
+    #         self.command_in_progress = False
+            
+    #         if not response_lines:
+    #             return "E: No response from Arduino"
+            
+    #         print(f"Response: {response_lines}")
+    #         cleaned_response = []
+    #         for line in response_lines:
+    #             if line.startswith("OK: ") or line.startswith("E: "):
+    #                 cleaned_response.append(line)
+    #         return "\n".join(cleaned_response)
+              
+    #     except Exception as e:
+    #         self.command_in_progress = False
+    #         return f"E: {str(e)}"
+    
+    # def wait_for_command_completion(self, timeout=30):
+    #     """Espera hasta que cualquier comando previo se complete."""
+    #     if not self.command_in_progress:
+    #         return True
+            
+    #     print("Waiting for previous command to complete...")
+    #     start_time = time.time()
+    #     while self.command_in_progress:
+    #         if time.time() - start_time > timeout:
+    #             print("Command timeout, resetting state")
+    #             self.command_in_progress = False
+    #             self.serial.reset_input_buffer()
+    #             return False
+    #         time.sleep(0.1)
+        
+    #     return True
+
+    # def home_x(self):
+    #     return self.send_command("HX")
+
+    # def home_y(self):
+    #     return self.send_command("HY")
+
+    # def get_position_x(self):
+    #     return self.send_command("POSX")
+
+    # def get_position_y(self):
+    #     return self.send_command("POSY")
+
+    # def move_without_PID(self, axis, distance):
+    #     if axis.upper() not in ["X", "Y"]:
+    #         return "E: Invalid axis"
+
+    #     command = f"M{axis.upper()} {distance}"
+    #     return self.send_command(command)
+    
+    # def move_with_PID(self, axis, distance):
+    #     if axis.upper() not in ["X", "Y"]:
+    #         return "E: Invalid axis"
+
+    #     command = f"PID{axis.upper()} {distance}"
+    #     return self.send_command(command)
+    
+    # def full_homing(self):
+    #   return self.send_command("FH")
+    
+    # def set_origin(self):
+    #     return self.send_command("SETORIGIN")
+
+    # def home_and_set_origin(self):
+    #     return self.send_command("HOME&SET&ORIGIN")
+    
+    # def max_limit_x(self):
+    #     """Get maximum X limit from Arduino."""
+    #     response = self.send_command("XLIMIT")
+    #     if response.startswith("OK"):
+    #         return response.split("OK: ")[1].strip()
+    #     return "0"
+        
+    # def max_limit_y(self):
+    #     """Get maximum Y limit from Arduino."""
+    #     response = self.send_command("YLIMIT")
+    #     if response.startswith("OK"):
+    #         return response.split("OK: ")[1].strip()
+    #     return "0"
 class ArduinoMegaPrinter(Arduino):
     def __init__(self, baudrate=115200, port=None):
         super().__init__(baudrate, port)

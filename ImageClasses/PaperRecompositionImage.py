@@ -11,7 +11,7 @@ COLOR_PALETTE = ['#43005c', '#6e0060', '#95005d',
 
 
 class PaperRecompositionImage(Image):
-    def __init__(self, camera_box, images, parameters, start):
+    def __init__(self, camera_box, images, parameters):
         """
         Initialize ImageFunction4 with camera and list of images.
 
@@ -24,7 +24,6 @@ class PaperRecompositionImage(Image):
         self.lines = None
         self.parameters = parameters["first_module"]
         self.masks = []
-        self.start = start
 
     def create_image(self):
         """
@@ -52,20 +51,20 @@ class PaperRecompositionImage(Image):
                   cv2.imwrite(filename, cv2.cvtColor(img.original_img, cv2.COLOR_BGR2RGB))
               print(f"Imagen {idx+1} guardada en: {filename}")
     
-        panorama = self.images[0].original_img
-        mask_panorama = self.images[0].mask
-        contours_panorama = self.images[0].red_polygons_contours
-        for idx, img in enumerate(self.images[1:]):
+        # panorama = self.images[0].original_img
+        # mask_panorama = self.images[0].mask
+        # contours_panorama = self.images[0].red_polygons_contours
+        # for idx, img in enumerate(self.images[1:]):
             
-            result = self.stitch_imgs(img, panorama, mask_panorama, contours_panorama)
-            if result is not None:
-                panorama = result
-                mask_panorama = self.create_mask(panorama)
-                contours_panorama = self.get_red_polygons_contours(mask_panorama)
-                self.save_panorama_step(panorama, step=idx+2)  # idx+2 porque la base es la 1
+        #     result = self.stitch_imgs(img, panorama, mask_panorama, contours_panorama)
+        #     if result is not None:
+        #         panorama = result
+        #         mask_panorama = self.create_mask(panorama)
+        #         contours_panorama = self.get_red_polygons_contours(mask_panorama)
+        #         self.save_panorama_step(panorama, step=idx+2)  # idx+2 porque la base es la 1
 
-            else:
-                print(f"Failed to stitch image {idx + 1} with the panorama.")
+        #     else:
+        #         print(f"Failed to stitch image {idx + 1} with the panorama.")
                     # panorama = np.zeros((self.height_px, self.width_px), dtype=np.uint8)
         # current_panorama = panorama.copy()
         # for idx, img in enumerate(self.images):
@@ -80,23 +79,23 @@ class PaperRecompositionImage(Image):
         #     current_panorama[y_start:y_end, x_start:x_end] = img.image[:img.height_px, :img.width_px]
 
         # print("Composite image created.")
-        new_panorama = np.zeros((self.height_px, self.width_px, 3), dtype=np.uint8)
-        y_start = self.images[0].corners_positions_px['top_left'][1]
-        x_start = self.images[0].corners_positions_px['top_left'][0]
-        y_end = y_start + panorama.shape[0]
-        x_end = x_start + panorama.shape[1]
-        new_panorama[y_start:y_end, x_start:x_end] = panorama[:panorama.shape[0], :panorama.shape[1]]
-        img_flat = new_panorama.reshape(-1, 3)
-        darkest_idx = np.argmin(img_flat.sum(axis=1))
-        darkest_color = img_flat[darkest_idx]
-        result = new_panorama.copy()
-        result[mask_panorama == 255] = darkest_color
-        gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
-        binary = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)[1]
-        self.image = binary
-        self.save_final_binary(self.image)
+        # new_panorama = np.zeros((self.height_px, self.width_px, 3), dtype=np.uint8)
+        # y_start = self.images[0].corners_positions_px['top_left'][1]
+        # x_start = self.images[0].corners_positions_px['top_left'][0]
+        # y_end = y_start + panorama.shape[0]
+        # x_end = x_start + panorama.shape[1]
+        # new_panorama[y_start:y_end, x_start:x_end] = panorama[:panorama.shape[0], :panorama.shape[1]]
+        # img_flat = new_panorama.reshape(-1, 3)
+        # darkest_idx = np.argmin(img_flat.sum(axis=1))
+        # darkest_color = img_flat[darkest_idx]
+        # result = new_panorama.copy()
+        # result[mask_panorama == 255] = darkest_color
+        # gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+        # binary = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)[1]
+        # self.image = binary
+        # self.save_final_binary(self.image)
         
-        print("Composite image created.")
+        # print("Composite image created.")
 
         
         # self.visualize_recomposition_process()
