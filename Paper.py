@@ -109,12 +109,9 @@ class Paper:
         Returns:
             list: List of camera positions for capturing the paper
         """
-        aux = self.composed_image.calculate_capture_photos_positions()
-        print("AUX")
-        print(aux)
-        self.capture_positions, index = aux[0], aux[1]
+        self.capture_positions = self.composed_image.calculate_capture_photos_positions()
+        
         print("Capture positions calculated: ", self.capture_positions)
-        return index
     
     def get_text(self):
         print("Extracting and rotating image...")
