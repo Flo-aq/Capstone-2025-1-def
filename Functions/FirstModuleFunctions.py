@@ -15,7 +15,7 @@ def first_module_process_image(image, kernel_size, sigma):
     """
     if len(image.shape) == 3 and image.shape[2] == 4:
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-    rotated = cv2.rotate(image, cv2.ROTATE_180)
+    rotated = cv2.rotate(image, cv2.ROTATE_270)
     
     print(image.shape)
     img_flat = rotated.reshape(-1, 3)

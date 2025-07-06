@@ -53,7 +53,7 @@ class PaperImage():
             None
         """
         if self.get_orientation():
-            self.image = cv2.rotate(self.image, cv2.ROTATE_180)
+            self.image = cv2.rotate(self.image, cv2.ROTATE_270)
 
     
     def calculate_dpi(self):
