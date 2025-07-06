@@ -1,5 +1,6 @@
 
 #include <VL53L0X.h>
+#include <Wire.h>
 ////////////////////////////////////////////////////////////////
 #define XSHUT_SENSOR_X A9
 #define XSHUT_SENSOR_Y A8
@@ -23,23 +24,23 @@ const int STEPS_PER_REV = 200 * 16;
 const float LEAD_SCREW_PITCH = 8.0;
 const float STEPS_PER_MM = STEPS_PER_REV / LEAD_SCREW_PITCH;
 ////////////////////////////////////////////////////////////////
-const int MAX_POS_X = 195 - 51.86;
-const int MAX_POS_Y = 211 - 27.39;
-const int MIN_POS_X = 0;
-const int MIN_POS_Y = 0;
+int MAX_POS_X = 195 - 51.86;
+int MAX_POS_Y = 211 - 27.39;
+int MIN_POS_X = 0;
+int MIN_POS_Y = 0;
 ////////////////////////////////////////////////////////////////
 const int HOMING_SPEED_FAST = 30;     
 const int HOMING_SPEED_SLOW = 150;
 const int HOMING_BACK_DISTANCE = 10 * STEPS_PER_MM;
 const unsigned long TIMEOUT_STEPS_X = 300 * STEPS_PER_MM;
-const unsigned long TIMEOUT_STEPS_Y = 200 * STEPS_PER_MM;
+const unsigned long TIMEOUT_STEPS_Y = 300 * STEPS_PER_MM;
 ////////////////////////////////////////////////////////////////
-const int MIN_DISTANCE_TOF_X = 20;
-const int MIN_DISTANCE_TOF_Y = 20;
-const int MAX_DISTANCE_TOF_X = 100;
-const int MAX_DISTANCE_TOF_Y = 100;
+int MIN_DISTANCE_TOF_X = 20;
+int MIN_DISTANCE_TOF_Y = 20;
+int MAX_DISTANCE_TOF_X = 100;
+int MAX_DISTANCE_TOF_Y = 100;
 ////////////////////////////////////////////////////////////////
-const int MOVE_SPEED = 100;
+const int MOVE_SPEED = 1000;
 ////////////////////////////////////////////////////////////////
 const unsigned long FAST_TOF_SPEED = 20000;
 const unsigned long SLOW_TOF_SPEED = 200000;
@@ -77,6 +78,13 @@ void makeStep(int stepPin, int delayTime);
 void moveMM(int stepPin, int dirPin, float distance, bool isXaxis);
 void stopMotors();
 float calculateMovedDistance(unsigned long steps, bool moveDirection);
+bool performFullHoming();
+bool initTofSensors();
+bool initializeTofSensorX(unsigned long timingBudget);
+bool initializeTofSensorY(unsigned long timingBudget);
+bool isValidTofReading(VL53L0X& sensor, int distance);
+int readAverageTofDistance(VL53L0X& sensor, int numSamples);
+void moveWithPID(float targetDistance, int stepPin, int dirPin, VL53L0X& sensor, int endstopPin, bool isXaxis);
 
 void setup() {
   Serial.begin(115200);
@@ -92,6 +100,12 @@ void setup() {
   digitalWrite(EN_PIN, HIGH);
   digitalWrite(STEP_X, LOW);
   digitalWrite(STEP_Y, LOW);
+  Wire.begin(); 
+  if (initTofSensors()) {
+      Serial.println("OK: TOF sensors initialized");
+    } else {
+      Serial.println("E: TOF initialization failed");
+    }
 }
 
 void loop() {
@@ -191,7 +205,7 @@ void processCommand(String command) {
       Serial.println("E: TOF X not initialized");
       return;
     }
-    int distance = readAverageTofDistance(tofSensorX);
+    int distance = readAverageTofDistance(tofSensorX, 6);
     if (distance < 0) {
       Serial.println("E: Invalid TOF X reading");
     } else {
@@ -204,20 +218,100 @@ void processCommand(String command) {
       Serial.println("E: TOF Y not initialized");
       return;
     }
-    int distance = readAverageTofDistance(tofSensorY);
+    int distance = readAverageTofDistance(tofSensorY, 6);
     if (distance < 0) {
       Serial.println("E: Invalid TOF Y reading");
     } else {
       Serial.print("OK: ");
       Serial.println(distance);
     }
-  } else if (command == "INITTOF") {
-    if (initTofSensors()) {
-      Serial.println("OK: TOF sensors initialized");
-    } else {
-      Serial.println("E: TOF initialization failed");
-    }
-  }  else {
+  } 
+  else if (command.startsWith("SET KP ")) {
+    kp = command.substring(7).toFloat();
+    Serial.print("OK: KP set to ");
+    Serial.println(kp);
+  }
+  else if (command.startsWith("SET KI ")) {
+    ki = command.substring(7).toFloat();
+    Serial.print("OK: KI set to ");
+    Serial.println(ki);
+  }
+  else if (command.startsWith("SET KD ")) {
+    kd = command.substring(7).toFloat();
+    Serial.print("OK: KD set to ");
+    Serial.println(kd);
+  }
+  else if (command.startsWith("SET MAX_X ")) {
+    MAX_POS_X = command.substring(9).toInt();
+    Serial.print("OK: MAX_X set to ");
+    Serial.println(MAX_POS_X);
+  }
+  else if (command.startsWith("SET MAX_Y ")) {
+    MAX_POS_Y = command.substring(9).toInt();
+    Serial.print("OK: MAX_Y set to ");
+    Serial.println(MAX_POS_Y);
+  }
+  else if (command.startsWith("SET MIN_X ")) {
+    MIN_POS_X = command.substring(9).toInt();
+    Serial.print("OK: MIN_X set to ");
+    Serial.println(MIN_POS_X);
+  }
+  else if (command.startsWith("SET MIN_Y ")) {
+    MIN_POS_Y = command.substring(9).toInt();
+    Serial.print("OK: MIN_Y set to ");
+    Serial.println(MIN_POS_Y);
+  }
+  else if (command.startsWith("SET MIN_TOF_X ")) {
+    MIN_DISTANCE_TOF_X = command.substring(13).toInt();
+    Serial.print("OK: MIN_TOF_X set to ");
+    Serial.println(MIN_DISTANCE_TOF_X);
+  }
+  else if (command.startsWith("SET MIN_TOF_Y ")) {
+    MIN_DISTANCE_TOF_Y = command.substring(13).toInt();
+    Serial.print("OK: MIN_TOF_Y set to ");
+    Serial.println(MIN_DISTANCE_TOF_Y);
+  }
+  else if (command.startsWith("SET MAX_TOF_X ")) {
+    MAX_DISTANCE_TOF_X = command.substring(13).toInt();
+    Serial.print("OK: MAX_TOF_X set to ");
+    Serial.println(MAX_DISTANCE_TOF_X);
+  }
+  else if (command.startsWith("SET MAX_TOF_Y ")) {
+    MAX_DISTANCE_TOF_Y = command.substring(13).toInt();
+    Serial.print("OK: MAX_TOF_Y set to ");
+    Serial.println(MAX_DISTANCE_TOF_Y);
+  }
+  // Get current parameters
+  else if (command == "GET PID") {
+    Serial.print("KP:");
+    Serial.print(kp);
+    Serial.print(" KI:");
+    Serial.print(ki);
+    Serial.print(" KD:");
+    Serial.println(kd);
+  }
+  else if (command == "GET LIMITS") {
+    Serial.print("X:[");
+    Serial.print(MIN_POS_X);
+    Serial.print(",");
+    Serial.print(MAX_POS_X);
+    Serial.print("] Y:[");
+    Serial.print(MIN_POS_Y);
+    Serial.print(",");
+    Serial.print(MAX_POS_Y);
+    Serial.println("]");
+  }
+  else if (command == "GET TOF_LIMITS") {
+    Serial.print("TOF_X:[");
+    Serial.print(MIN_DISTANCE_TOF_X);
+    Serial.print(",");
+    Serial.print(MAX_DISTANCE_TOF_X);
+    Serial.print("] TOF_Y:[");
+    Serial.print(MIN_DISTANCE_TOF_Y);
+    Serial.print(",");
+    Serial.print(MAX_DISTANCE_TOF_Y);
+    Serial.println("]");
+  } else {
     Serial.println("E: CNF");
   }
 }
@@ -469,7 +563,7 @@ bool isValidTofReading(VL53L0X& sensor, int distance) {
 }
 
 // Read average TOF distance from multiple samples
-int readAverageTofDistance(VL53L0X& sensor, int numSamples = 6) {
+int readAverageTofDistance(VL53L0X& sensor, int numSamples = 12) {
   long sum = 0;
   int validReadings = 0;
   

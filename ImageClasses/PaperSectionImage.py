@@ -45,7 +45,7 @@ class PaperSectionImage(Image):
             raise ValueError("No image to process")
         if len(self.image.shape) == 3 and self.image.shape[2] == 4:
           self.image = cv2.cvtColor(self.image, cv2.COLOR_BGRA2BGR)
-        rotated = cv2.rotate(self.image, cv2.ROTATE_180)
+        rotated = cv2.rotate(self.image, cv2.ROTATE_270)
         self.original_img = rotated.copy()
         self.create_mask(rotated)
         img_flat = rotated.reshape(-1, 3)

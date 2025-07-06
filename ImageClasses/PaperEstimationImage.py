@@ -44,9 +44,9 @@ class PaperEstimationImage(Image):
         self.parameters = parameters["second_module"]
         self.polygon = None
         self.top_image = top_image
-        self.top_image.image = cv2.rotate(self.top_image.image, cv2.ROTATE_180)
+        self.top_image.image = cv2.rotate(self.top_image.image, cv2.ROTATE_270)
         self.bottom_image = bottom_image
-        self.bottom_image.image = cv2.rotate(self.bottom_image.image, cv2.ROTATE_180)
+        self.bottom_image.image = cv2.rotate(self.bottom_image.image, cv2.ROTATE_270)
         self.case = 0
         self.grouped_lines = None
         self.unique_corners = None
