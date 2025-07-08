@@ -13,6 +13,7 @@ from Controllers.DeviceManager import DeviceManager
 from Functions.AuxFunctions import load_json
 from GCodeGenerator import GCodeGenerator
 from ImageClasses.CornerImage import CornerImage
+from ImageClasses.ImageStitcher import ImageStitcher
 from ImageClasses.PaperSectionImage import PaperSectionImage
 from ImageClasses.PaperRecompositionImage import PaperRecompositionImage
 from Paper import Paper
@@ -36,7 +37,9 @@ class Main:
         
         self.braille_converter = BrailleToCoordinates(self.config)
         
-        self.g_code_generator = GCodeGenerator
+        # self.g_code_generator = GCodeGenerator()
+        
+        self.image_stitcher = ImageStitcher()
         
         self.top_left_img = None
         self.bottom_right_img = None
@@ -160,7 +163,7 @@ class Main:
         # No continuar hasta tener una respuesta válida
         if x_limit_response and not x_limit_response.startswith("E:"):
             try:
-                x_limit = float(x_limit_response)
+                x_limit = float(x_limit_response.split(" ")[1])
                 print(f"X limit: {x_limit}")
             except ValueError:
                 print(f"E: Invalid X limit value: {x_limit_response}")
@@ -175,7 +178,7 @@ class Main:
         # No continuar hasta tener una respuesta válida
         if y_limit_response and not y_limit_response.startswith("E:"):
             try:
-                y_limit = float(y_limit_response)
+                y_limit = float(y_limit_response.split(" ")[1])
                 print(f"Y limit: {y_limit}")
             except ValueError:
                 print(f"E: Invalid Y limit value: {y_limit_response}")
@@ -190,7 +193,10 @@ class Main:
         
     
         self.top_left_img = CornerImage(image=None, camera_box=self.camera_box, parameters=self.config)
+        led_on_response = self.device_manager.arduino_mega_scanner.turn_on_leds()
+        time.sleep(2)  # Esperar un segundo para que los LEDs se enciendan
         self.top_left_img.capture_and_process()
+        led_off_response = self.device_manager.arduino_mega_scanner.turn_off_leds()
 
         if self.top_left_img.image is None:
             print("E: Failed to capture top left image.")
@@ -198,7 +204,10 @@ class Main:
         
         self.move_to_corner("bottom_right")
         self.bottom_right_img = CornerImage(image=None,camera_box=self.camera_box,parameters=self.config)
+        led_on_response = self.device_manager.arduino_mega_scanner.turn_on_leds()
+        time.sleep(2)  # Esperar un segundo para que los LEDs se enciendan
         self.bottom_right_img.capture_and_process()
+        led_off_response = self.device_manager.arduino_mega_scanner.turn_off_leds()
 
         if self.bottom_right_img.image is None:
             print("E: Failed to capure bottom right image")
@@ -207,30 +216,40 @@ class Main:
         self.paper = Paper(self.config, self.camera_box, self.translator)
         self.paper.set_position(self.top_left_img, self.bottom_right_img)
         self.paper.calculate_capture_positions()
-        # if index == 0:
-        #   start = "TL"
-        # else:
-        #   start = "TR"
+        # # if index == 0:
+        # #   start = "TL"
+        # # else:
+        # #   start = "TR"
         
         for i, pos in enumerate(self.paper.capture_positions):
             print(f"Moving camera to capture position {pos}...")
             print(f"Capturing image {i + 1}...")
             self.move_to_position(pos[0], pos[1])
-            img = PaperSectionImage(
-                image=None,
-                camera_box=self.camera_box
-            )
-            img.capture_and_process()
+            led_on_response = self.device_manager.arduino_mega_scanner.turn_on_leds()
+            time.sleep(2)  # Esperar un segundo para que los LEDs se enciendan
+            img = self.camera.capture_image()
+            led_off_response = self.device_manager.arduino_mega_scanner.turn_off_leds()
             self.imgs.append(img)
         
-        self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config)
+        print("Creating paper image...")
+            
+        self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config, stitcher=self.image_stitcher)
         # print("Creating paper image...")
         # self.paper.image.create_image()
-        # self.paper.get_text()
-        # self.paper.translate_text()
-        # print("Text captured and translated.")
-        # print("Generating braille coordinates...")
-        # self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
+        self.paper.get_text()
+        self.paper.translate_text()
+        print("Text captured and translated.")
+        print("Generating braille coordinates...")
+        self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
+        self.braille_converter.sort_coordinates()
+        # print(self.braille_converter.sorted_coordinates[:10])  # Print first 10 coordinates for debugging
+        # success = self.device_manager.arduino_mega_printer.print_braille_points(self.braille_converter.sorted_coordinates[:10])
+        # if success:
+        #     print("Braille printing completed successfully!")
+        # else:
+        #     print("E: Braille printing failed")
+        
+        # return success
 
 if __name__ == "__main__":
     main = Main()

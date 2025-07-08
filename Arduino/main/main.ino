@@ -1,12 +1,22 @@
 
 #include <VL53L0X.h>
 #include <Wire.h>
+#include <FastLED.h>
+
 ////////////////////////////////////////////////////////////////
 #define XSHUT_SENSOR_X A9
 #define XSHUT_SENSOR_Y A8
 
+#define NUM_LEDS    16
+#define LED_PIN     40
+#define BRIGHTNESS  210
+
+
 VL53L0X tofSensorX;
 VL53L0X tofSensorY;
+
+CRGB leds[NUM_LEDS];
+bool ledsInitialized = false;
 
 ////////////////////////////////////////////////////////////////
 const int EN_PIN = 8;
@@ -24,13 +34,13 @@ const int STEPS_PER_REV = 200 * 16;
 const float LEAD_SCREW_PITCH = 8.0;
 const float STEPS_PER_MM = STEPS_PER_REV / LEAD_SCREW_PITCH;
 ////////////////////////////////////////////////////////////////
-int MAX_POS_X = 195 - 51.86;
-int MAX_POS_Y = 211 - 27.39;
+int MAX_POS_X = 300;
+int MAX_POS_Y = 300;
 int MIN_POS_X = 0;
 int MIN_POS_Y = 0;
 ////////////////////////////////////////////////////////////////
-const int HOMING_SPEED_FAST = 30;     
-const int HOMING_SPEED_SLOW = 150;
+const int HOMING_SPEED_FAST = 30; //30    
+const int HOMING_SPEED_SLOW = 150; //150
 const int HOMING_BACK_DISTANCE = 10 * STEPS_PER_MM;
 const unsigned long TIMEOUT_STEPS_X = 300 * STEPS_PER_MM;
 const unsigned long TIMEOUT_STEPS_Y = 300 * STEPS_PER_MM;
@@ -40,7 +50,7 @@ int MIN_DISTANCE_TOF_Y = 20;
 int MAX_DISTANCE_TOF_X = 100;
 int MAX_DISTANCE_TOF_Y = 100;
 ////////////////////////////////////////////////////////////////
-const int MOVE_SPEED = 1000;
+const int MOVE_SPEED = 60;//100
 ////////////////////////////////////////////////////////////////
 const unsigned long FAST_TOF_SPEED = 20000;
 const unsigned long SLOW_TOF_SPEED = 200000;
@@ -54,8 +64,8 @@ const unsigned long resetCooldown = 1000;
 const int PRECISION_THRESHOLD_ON = 15;  // Umbral para activar alta precisión
 const int PRECISION_THRESHOLD_OFF = 25; // Umbral para desactivar (más grande)
 ////////////////////////////////////////////////////////////////
-const float ORIGIN_OFFSET_X = 51.86; // Ajusta según la posición real del origen
-const float ORIGIN_OFFSET_Y = 27.39; // Ajusta según la posición real del origen
+const float ORIGIN_OFFSET_X = 48; // Ajusta según la posición real del origen
+const float ORIGIN_OFFSET_Y = 105; // Ajusta según la posición real del origen
 ////////////////////////////////////////////////////////////////
 float kp = 0.8;
 float ki = 0.1;
@@ -101,11 +111,7 @@ void setup() {
   digitalWrite(STEP_X, LOW);
   digitalWrite(STEP_Y, LOW);
   Wire.begin(); 
-  if (initTofSensors()) {
-      Serial.println("OK: TOF sensors initialized");
-    } else {
-      Serial.println("E: TOF initialization failed");
-    }
+  initTofSensors();
 }
 
 void loop() {
@@ -124,6 +130,28 @@ void loop() {
     Serial.println("COMMAND EXECUTED");
     inputBuffer = "";
     commandComplete = false;
+  }
+}
+
+void initLEDs() {
+  if (!ledsInitialized) {
+    FastLED.addLeds<WS2811, LED_PIN, RGB>(leds, NUM_LEDS);
+    FastLED.setBrightness(BRIGHTNESS);
+    FastLED.setCorrection(0xFFFFFF);
+    ledsInitialized = true;
+  }
+}
+
+void turnOnLEDs() {
+  initLEDs();
+  fill_solid(leds, NUM_LEDS, CRGB::White);
+  FastLED.show();
+}
+
+void turnOffLEDs() {
+  if (ledsInitialized) {
+    fill_solid(leds, NUM_LEDS, CRGB::Black);
+    FastLED.show();
   }
 }
 
@@ -174,9 +202,16 @@ void processCommand(String command) {
       Serial.println("E: HOMING FAILED");
       return;
     }
+    Serial.println(ORIGIN_OFFSET_Y);
+    current_pos_x = 0.0;
+    current_pos_y = 0.0;
+    
     moveMM(STEP_X, DIR_X, ORIGIN_OFFSET_X, true);
     moveMM(STEP_Y, DIR_Y, ORIGIN_OFFSET_Y, false);
 
+    MAX_POS_X = 245 - ORIGIN_OFFSET_X;
+    MAX_POS_Y = 174 - ORIGIN_OFFSET_Y;
+    
     current_pos_x = 0.0;
     current_pos_y = 0.0;
 
@@ -187,18 +222,16 @@ void processCommand(String command) {
   } else if (command == "YLIMIT") {
     Serial.print("OK: ");
     Serial.println(MAX_POS_Y);
-  } else if (command.startsWith("TOFX ")) {
-    float distance = command.substring(5).toFloat();
-    moveWithPID(distance, STEP_X, DIR_X, tofSensorX, ENDSTOP_X, true);
-  } else if (command.startsWith("TOFY ")) {
-    float distance = command.substring(5).toFloat();
-    moveWithPID(distance, STEP_Y, DIR_Y, tofSensorY, ENDSTOP_Y, false);
   } else if (command.startsWith("PIDX ")) {
-    float distance = command.substring(5).toFloat();
-    moveWithPID(distance, STEP_X, DIR_X, tofSensorX, ENDSTOP_X, true);
+    int showPrint = command.substring(5).toInt();
+    float distance = command.substring(7).toFloat();
+    bool show = (showPrint != 0);  // Fix: declare show at this scope level and assign properly
+    moveWithPID(distance, STEP_X, DIR_X, tofSensorX, ENDSTOP_X, true, show);
   } else if (command.startsWith("PIDY ")) {
-    float distance = command.substring(5).toFloat();
-    moveWithPID(distance, STEP_Y, DIR_Y, tofSensorY, ENDSTOP_Y, false);
+    int showPrint = command.substring(5).toInt();
+    float distance = command.substring(7).toFloat();
+    bool show = (showPrint != 0);  // Fix: declare show at this scope level and assign properly
+    moveWithPID(distance, STEP_Y, DIR_Y, tofSensorY, ENDSTOP_Y, false, show);
   } else if (command == "TOFX") {
     // Solo leer el sensor X
     if (!sensorTofXOk) {
@@ -311,6 +344,13 @@ void processCommand(String command) {
     Serial.print(",");
     Serial.print(MAX_DISTANCE_TOF_Y);
     Serial.println("]");
+  } else if (command == "LED ON" || command == "LED") {
+    turnOnLEDs();
+    Serial.println("OK: LED ON");
+  }
+  else if (command == "LED OFF") {
+    turnOffLEDs();
+    Serial.println("OK: LED OFF");
   } else {
     Serial.println("E: CNF");
   }
@@ -584,12 +624,20 @@ int readAverageTofDistance(VL53L0X& sensor, int numSamples = 12) {
 }
 
 // Simple PID-controlled movement using TOF sensors
-void moveWithPID(float targetDistance, int stepPin, int dirPin, VL53L0X& sensor, int endstopPin, bool isXaxis) {
-  Serial.print("PID movement: ");
-  Serial.print(targetDistance);
-  Serial.println(" mm");
+void moveWithPID(float targetDistance, int stepPin, int dirPin, VL53L0X& sensor, int endstopPin, bool isXaxis, bool showPrints) {
+  if (abs(targetDistance) < 50) {
+    if (showPrints) {
+      Serial.println("Small distance detected, using direct movement");
+    }
+    moveMM(stepPin, dirPin, targetDistance, isXaxis);
+    return;
+  }
+  if (showPrints) {
+    Serial.print("PID movement: ");
+    Serial.print(targetDistance);
+    Serial.println(" mm");
+  }
   
-  // Check if sensor is functioning
   bool& sensorOk = isXaxis ? sensorTofXOk : sensorTofYOk;
   if (!sensorOk) {
     Serial.println("E: TOF sensor not initialized");
@@ -603,37 +651,41 @@ void moveWithPID(float targetDistance, int stepPin, int dirPin, VL53L0X& sensor,
     return;
   }
   
+  const int MIN_TOF_DISTANCE = isXaxis ? MIN_DISTANCE_TOF_X : MIN_DISTANCE_TOF_Y;
+  const int MAX_TOF_DISTANCE = isXaxis ? MAX_DISTANCE_TOF_X : MAX_DISTANCE_TOF_Y;
+
+  if (initialTofDistance - targetDistance < MIN_TOF_DISTANCE) {
+    targetDistance = -MIN_TOF_DISTANCE + initialTofDistance;
+  } else if (initialTofDistance - targetDistance > MAX_TOF_DISTANCE) {
+    targetDistance = -MAX_TOF_DISTANCE + initialTofDistance;
+  } 
+
+  float targetTofDistance = initialTofDistance - targetDistance;
+
+  if (targetTofDistance < 25) {
+    moveMM(stepPin, dirPin, targetDistance, isXaxis);
+    return;
+  }
   // Enable motors
   digitalWrite(EN_PIN, LOW);
   delay(100);
   
-  // Set distance limits based on axis
-  const int MIN_TOF_DISTANCE = isXaxis ? MIN_DISTANCE_TOF_X : MIN_DISTANCE_TOF_Y;
-  const int MAX_TOF_DISTANCE = isXaxis ? MAX_DISTANCE_TOF_X : MAX_DISTANCE_TOF_Y;
-  
-  // Initialize counters
   int iterations = 0;
   unsigned long totalSteps = 0;
+    
+  if (showPrints) {
+    Serial.print("Initial TOF: ");
+    Serial.print(initialTofDistance);
+    Serial.print(" mm, Target TOF: ");
+    Serial.print(targetTofDistance);
+    Serial.println(" mm");
+  }
   
-  // Calculate target TOF distance
-  // When moving toward sensor, TOF reading decreases
-  int targetTofDistance = initialTofDistance - targetDistance;
-  
-  // Make sure target is within valid range
-  targetTofDistance = constrain(targetTofDistance, MIN_TOF_DISTANCE, MAX_TOF_DISTANCE);
-  
-  Serial.print("Initial TOF: ");
-  Serial.print(initialTofDistance);
-  Serial.print(" mm, Target TOF: ");
-  Serial.print(targetTofDistance);
-  Serial.println(" mm");
-  
-  // Set direction based on target movement
-  bool moveTowardsSensor = (targetDistance > 0);
+  bool moveTowardsEndstop = (targetDistance > 0);
   if (isXaxis) {
-    digitalWrite(dirPin, moveTowardsSensor ? LOW : HIGH);
+    digitalWrite(dirPin, moveTowardsEndstop ? LOW : HIGH);
   } else {
-    digitalWrite(dirPin, moveTowardsSensor ? HIGH : LOW);
+    digitalWrite(dirPin, moveTowardsEndstop ? HIGH : LOW);
   }
   
   // Initialize PID variables
@@ -643,145 +695,121 @@ void moveWithPID(float targetDistance, int stepPin, int dirPin, VL53L0X& sensor,
   int currentTofDistance = initialTofDistance;
   bool approachComplete = false;
   bool highPrecisionMode = false;
+
+  int minStepDelay = 15;
+  int maxStepDelay = 350;
+  int stepDelay = 60; // Start with minimum delay
   
-  // Main PID control loop
-  while (iterations < MAX_ITERATIONS_PID && !approachComplete) {
-    // Check if endstop triggered
-    
-    
-    // Get current distance (average of readings)
-    currentTofDistance = readAverageTofDistance(sensor);
-    
-    // Check for valid reading
-    if (currentTofDistance < 0) {
-      Serial.println("E: Invalid TOF reading during movement");
-      break;
-    }
-    
-    // Calculate error
-    error = targetTofDistance - currentTofDistance;
-    
-    // Check if target reached
-    if (moveTowardsSensor) {
-      // When moving toward sensor, TOF reading decreases
-      if (currentTofDistance <= targetTofDistance) {
-        approachComplete = true;
-      }
-    } else {
-      // When moving away from sensor, TOF reading increases
-      if (currentTofDistance >= targetTofDistance) {
-        approachComplete = true;
-      }
-    }
-    
-    // Exit if target reached
-    if (approachComplete) {
-      break;
-    }
-    
-    // Check if out of range
-    if (currentTofDistance < MIN_TOF_DISTANCE || currentTofDistance > MAX_TOF_DISTANCE) {
-      Serial.println("E: TOF out of range");
-      break;
-    }
-    
-    // Calculate PID components
-    integral += error;
-    integral = constrain(integral, -1000, 1000); // Prevent integral windup
-    float derivative = error - prevError;
-    
-    // Calculate output
-    float output = kp * error + ki * integral + kd * derivative;
-    
-    // Determine direction
-    bool pidDirection = (output > 0);
-    if (isXaxis) {
-      digitalWrite(dirPin, pidDirection ? LOW : HIGH);
-    } else {
-      digitalWrite(dirPin, pidDirection ? HIGH : LOW);
+  bool currentDirection = moveTowardsEndstop; // True if moving towards endstop, false otherwise
+  Serial.println(">> IT\tDIST\tERROR\tINTG\tDERIV\tOUTPUT\tPASOS");  // PRINT TEMPORAL
+
+  while (iterations < MAX_ITERATIONS_PID) {
+    if (digitalRead(endstopPin) == LOW) {
+      Serial.println("E: PHYSICAL LIMIT");
+      stopMotors();
+      return;
     }
 
-    int stepsToMove = constrain(abs(output), 1, 50);
-    
-    // Check endstop before starting movement
-    if (digitalRead(endstopPin) == LOW) {
-        // If endstop is triggered and we're trying to move toward it, stop
-        if ((isXaxis && !pidDirection) || (!isXaxis && pidDirection)) {
-            Serial.println("E: PHYSICAL LIMIT");
-            break;
-        }
+    currentTofDistance = readAverageTofDistance(sensor);
+    if (currentTofDistance < 0) {
+      Serial.println("E: Invalid TOF reading");
+      stopMotors();
+      approachComplete = true;
+      break;
     }
-    
-    
-    // Print debug info periodically
-    if (iterations % 10 == 0) {
+    error = targetTofDistance - currentTofDistance;
+
+    if (abs(error) < 25) {
+      if (showPrints) {
+        Serial.println("E: PID error below threshold, stopping movement");
+      }
+      approachComplete = true;
+
+      break; // Stop if error is small enough
+    }
+
+    integral += error;
+    integral = constrain(integral, -1000, 1000); // Limit integral to prevent windup
+
+    float derivative = error - prevError;
+    prevError = error;
+
+    float output = kp * error + ki * integral + kd * derivative;
+
+    currentDirection = (output > 0);
+    if (isXaxis) {
+      digitalWrite(dirPin, currentDirection ? LOW : HIGH);
+    } else {
+      digitalWrite(dirPin, currentDirection ? HIGH : LOW);
+    }
+
+    int stepsToMove = max(1, abs(constrain(output, -200, 200)) / STEPS_PER_MM);
+
+    stepDelay = map(constrain(abs(error), 25, 200), 25, 200, maxStepDelay, minStepDelay);
+
+    if (showPrints) {
       Serial.print(iterations);
-      Serial.print("\tDist:");
+      Serial.print("\t");
       Serial.print(currentTofDistance);
-      Serial.print("\tErr:");
+      Serial.print("\t");
       Serial.print(error);
-      Serial.print("\tI:");
+      Serial.print("\t");
       Serial.print(integral);
-      Serial.print("\tD:");
+      Serial.print("\t");
       Serial.print(derivative);
-      Serial.print("\tSteps:");
+      Serial.print("\t");
+      Serial.print(output);
+      Serial.print("\t");
       Serial.println(stepsToMove);
     }
-    
-    // Execute movement
-    for (int i = 0; i < stepsToMove; i++) {
-        // If endstop is triggered during movement
-        if (digitalRead(endstopPin) == LOW) {
-            // Only stop if we're moving toward the endstop
-            if ((isXaxis && !pidDirection) || (!isXaxis && pidDirection)) {
-                Serial.println("E: ENDSTOP HIT");
-                approachComplete = false; // End the PID loop
-                break;
-            }
-        }
-        
-        makeStep(stepPin, 150);
-        totalSteps++;
-    }
-    
-    // Save current error for next iteration
-    prevError = error;
-    iterations++;
-    
-    // Small delay to allow readings to stabilize
-    delay(20);
-  }
 
-  
-  // Calculate actual movement
-  float distanceMoved;
-  if (iterations >= MAX_ITERATIONS_PID) {
-    Serial.println("E: Max iterations reached");
-    distanceMoved = initialTofDistance - currentTofDistance;
-  } else if (approachComplete) {
-    distanceMoved = targetDistance;
-  } else {
-    distanceMoved = initialTofDistance - currentTofDistance;
+    for (int i = 0; i < stepsToMove && !approachComplete; i++) {
+      float nextPos = isXaxis ? current_pos_x : current_pos_y;
+      nextPos += currentDirection ? 1.0/STEPS_PER_MM : -1.0/STEPS_PER_MM;
+
+      if ((isXaxis && (nextPos < MIN_POS_X || nextPos > MAX_POS_X)) || 
+          (!isXaxis && (nextPos < MIN_POS_Y || nextPos > MAX_POS_Y))) {
+        Serial.println("E: POSITION LIMIT");
+        approachComplete = true;
+        break;
+      }
+
+      makeStep(stepPin, stepDelay);
+      totalSteps++;
+      
+      if (isXaxis) {
+        current_pos_x += currentDirection ? 1.0/STEPS_PER_MM : -1.0/STEPS_PER_MM;
+      } else {
+        current_pos_y += currentDirection ? 1.0/STEPS_PER_MM : -1.0/STEPS_PER_MM;
+      }
+      
+      // Check endstop
+      if (digitalRead(endstopPin) == LOW) {
+        Serial.println("E: ENDSTOP HIT");
+        approachComplete = true;
+        break;
+      }
+    }
+
+    iterations++;
+    delay(10);
+
+  }
+  float movedDistance = (float)totalSteps / STEPS_PER_MM;
+  if (!currentDirection) {  // Si la dirección final era negativa
+    movedDistance = -movedDistance;
   }
   
-  // Update position
-  if (isXaxis) {
-    current_pos_x += distanceMoved;
-  } else {
-    current_pos_y += distanceMoved;
+  // Move remaining distance directly
+  float remainingDistance = targetDistance - movedDistance;
+  
+  if (abs(remainingDistance) > 2.0) { // Only move if remaining distance is significant
+    if (showPrints) {
+      Serial.print("PID complete. Moving remaining distance: ");
+      Serial.println(remainingDistance);
+    }
+    moveMM(stepPin, dirPin, remainingDistance, isXaxis);
   }
   
-  // Stop motors
   stopMotors();
-  
-  // Print result
-  Serial.print("PID complete - Iterations: ");
-  Serial.print(iterations);
-  Serial.print(", Final TOF: ");
-  Serial.print(currentTofDistance);
-  Serial.print(", Distance moved: ");
-  Serial.println(distanceMoved);
-  
-  Serial.print("OK: ");
-  Serial.println(distanceMoved);
 }

@@ -69,15 +69,20 @@ class DeviceManager:
     def identify_arduino(self, port):
         try:
             with serial.Serial(port, 115200, timeout=1) as ser:
+                ser.reset_input_buffer()
                 time.sleep(2)  # Wait for the Arduino to reset
                 ser.write(b'M119\n')
                 time.sleep(0.5)
-                for i in range(4):
+                for i in range(10):
                     line = ser.readline().decode('utf-8').strip()
-                    if "ok" in line.lower():
+                    print(f"Line {i+1}: {line}")
+                    if "triggered" in line.lower() or "open" in line.lower():
+                        print(1)
                         return "printer"
-                    if "e: cnf" in line.lower():
+                    if "e: cnf" in line.lower() or "tof" in line.lower():
+                        print(2)
                         return "scanner"
+                print(3)
                 return "unknown"
         except serial.SerialException as e:
             print(f"E: Serial error on {port}: {e}")

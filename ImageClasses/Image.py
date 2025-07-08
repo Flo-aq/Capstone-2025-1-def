@@ -19,15 +19,15 @@ class Image:
         self.camera = camera_box.camera
 
         if function not in [2, 4]:
-            self.height_mm = self.camera.fov_v_mm
-            self.width_mm = self.camera.fov_h_mm
-            self.height_px = self.camera.fov_v_px
-            self.width_px = self.camera.fov_h_px
+            self.height_mm = self.camera.fov_h_mm
+            self.width_mm = self.camera.fov_v_mm
+            self.height_px = self.camera.fov_h_px
+            self.width_px = self.camera.fov_v_px
         else:
-            self.height_mm = self.camera_box.reference_system.range_of_motion_height_mm + self.camera.fov_v_mm
-            self.width_mm = self.camera_box.reference_system.range_of_motion_width_mm+ self.camera.fov_h_mm
-            self.height_px = int(self.height_mm / self.camera.mm_per_px_v)
-            self.width_px = int(self.width_mm/ self.camera.mm_per_px_h)
+            self.height_mm = self.camera_box.reference_system.range_of_motion_height_mm + self.camera.fov_h_mm
+            self.width_mm = self.camera_box.reference_system.range_of_motion_width_mm+ self.camera.fov_v_mm
+            self.height_px = int(self.height_mm / self.camera.mm_per_px_h)
+            self.width_px = int(self.width_mm/ self.camera.mm_per_px_v)
 
     def get_mm_coordinates_in_img(self, x_px, y_px):
         """

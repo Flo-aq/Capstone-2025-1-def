@@ -5,10 +5,14 @@ class GCodeGenerator:
     
     def start_gcode(self):
         self.script.append("G28 X;")
+        self.script.append("M84;")
         self.script.append("G28 Y;")
+        self.script.append("M84;")
         self.script.append("M204 T1500;")
         self.script.append("G1 F6000;")
         self.script.append("G1 X0.00 Y0.00;")
+        self.script.append("M84;")
+
     
     def end_gcode(self):
         self.script.append("M84;")
@@ -18,8 +22,18 @@ class GCodeGenerator:
             x, y = coord
             self.script.append(f"G1 X{x:.2f} Y{y:.2f};")
             self.script.append("M84;")
-            self.script.append("M3 S1;")
-            self.script.append("M3 S0;")
+            self.script.append("M3")
+            self.script.append("M5;")
+            self.script.append("M3")
+            self.script.append("M5;")
+            self.script.append("M3")
+            self.script.append("M5;")
+            self.script.append("M3")
+            self.script.append("M5;")
+            self.script.append("M3")
+            self.script.append("M5;")
+            self.script.append("M3")
+            self.script.append("M5;")
     
     def generate_gcode(self):
         self.start_gcode()
