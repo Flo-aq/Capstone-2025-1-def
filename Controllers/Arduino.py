@@ -110,7 +110,7 @@ class ArduinoMegaScanner(Arduino):
             start_time = time.time()
             response_lines = []
             
-            while (time.time() - start_time) < 20:  # 20 segundos de timeout
+            while (time.time() - start_time) < 600:  # 20 segundos de timeout
                 if self.serial.in_waiting > 0:
                     line = self.serial.readline().decode('utf-8').strip()
                     if line:
@@ -143,7 +143,7 @@ class ArduinoMegaScanner(Arduino):
             self.communication_thread.start()
             print("Communication thread started")
 
-    def send_command(self, command, timeout=30):
+    def send_command(self, command, timeout=600):
         """Send a command to Arduino and wait for response."""
         # Start communication thread if needed
         if self.communication_thread is None or not self.communication_thread.is_alive():
@@ -226,6 +226,14 @@ class ArduinoMegaScanner(Arduino):
         if response.startswith("OK:"):
             return response
         return "0"
+    
+    def turn_on_leds(self):
+        """Turn on the LEDs."""
+        return self.send_command("LED ON")
+    
+    def turn_off_leds(self):
+        """Turn off the LEDs."""
+        return self.send_command("LED OFF")
 
     # def send_command(self, command):
     #     if not self.is_connected():
@@ -360,39 +368,192 @@ class ArduinoMegaPrinter(Arduino):
     def __init__(self, baudrate=115200, port=None):
         super().__init__(baudrate, port)
         self.type = "Arduino Mega"
+        self.command_queue = queue.Queue()
+        self.response_queue = queue.Queue()
+        self.communication_thread = None
+        self.running = False
+        self.lock = threading.Lock()
+        self.last_command_time = 0
 
-    def send_command(self, command):
+    def start_communication_thread(self):
+        if self.communication_thread is None or not self.communication_thread.is_alive():
+            self.running = True
+            self.communication_thread = threading.Thread(target=self._communication_worker)
+            self.communication_thread.daemon = True
+            self.communication_thread.start()
+            print("Printer communication thread started")
+    
+    def stop_communication_thread(self):
+        self.running = False
+        if self.communication_thread and self.communication_thread.is_alive():
+            self.communication_thread.join(timeout=0.5)
+            print("Printer communication thread stopped")
+    
+    def _communication_worker(self):
+        while self.running and self.is_connected():
+            try:
+                command = self.command_queue.get(timeout=0.5)
+                print(f"Processing printer command: {command}")
+                with self.lock:
+                    self._execute_command(command)
+                self.command_queue.task_done()
+            except queue.Empty:
+                pass
+            except Exception as e:
+                print(f"Error in printer communication thread: {e}")
+                self.response_queue.put(f"E: {str(e)}")
+    
+    def _execute_command(self, command):
         if not self.is_connected():
-            return "Error: Arduino Mega no conectado"
-
-        command_type = command.split(" ")[0]
-        allowed_commands = ["G28", "M204", "G1", "M3", "M84"]
-        if command_type not in allowed_commands:
-            return "E: Invalid command"
-
+            self.response_queue.put("E: Arduino Mega Printer not connected")
+            return
         try:
+            self.serial.reset_input_buffer()
+            
             if not command.endswith('\n'):
                 command += '\n'
+            
             self.serial.write(command.encode('utf-8'))
-
+            self.serial.flush()
+            
+            # Para comandos de impresión, esperamos respuesta OK
             start_time = time.time()
             response_lines = []
-
-            while time.time() - start_time < 20:
+            
+            while (time.time() - start_time) < 10:  # 10 segundos máximo de espera
                 if self.serial.in_waiting > 0:
                     line = self.serial.readline().decode('utf-8').strip()
                     if line:
-                        response_lines.append(line)
-                        if line == "COMMAND EXECUTED":
+                        print(f"Printer response: {line}")
+                        if line == "ok" or line.startswith("ok:") or line.startswith("e"):
+                            response_lines.append(line)
                             break
                 else:
                     time.sleep(0.1)
-
-            if not response_lines or len(response_lines) == 1:
-                return "E"
-
-            if len(response_lines) > 1:
-                return "\n".join(response_lines[:-1])
-
+            
+            if not response_lines:
+                self.response_queue.put("E: No response from Arduino Printer")
+            else:
+                self.response_queue.put(response_lines[0])  # Devolver solo la primera línea de respuesta
+                
         except Exception as e:
-            return f"E: {str(e)}"
+            self.response_queue.put(f"E: {str(e)}")
+
+    def send_command(self, command, timeout=10):
+        """Send a command to Arduino Mega Printer and wait for response."""
+        # Start communication thread if needed
+        if self.communication_thread is None or not self.communication_thread.is_alive():
+            self.start_communication_thread()
+        
+        if not self.is_connected():
+            return "E: Arduino Mega Printer not connected"
+        
+        # Add command to queue
+        self.command_queue.put(command)
+        
+        # Wait for response with timeout
+        start_time = time.time()
+        while (time.time() - start_time) < timeout:
+            try:
+                response = self.response_queue.get(timeout=0.5)
+                self.response_queue.task_done()
+                return response
+            except queue.Empty:
+                # No response yet, keep waiting
+                pass
+        
+        return "E: Printer response timeout"
+
+    def connect(self, port=None, max_attempts=3, delay=2):
+        result = super().connect(port, max_attempts, delay)
+        if result:
+            self.start_communication_thread()
+        return result
+        
+    def disconnect(self):
+        self.stop_communication_thread()
+        super().disconnect()
+
+    def home_all(self):
+        """Home all axes."""
+        return self.send_command("G28")
+        
+    def home_x(self):
+        """Home X axis."""
+        return self.send_command("G28 X")
+        
+    def home_y(self):
+        """Home Y axis."""
+        return self.send_command("G28 Y")
+    
+    def stop_motors(self):
+        """Stop all motors."""
+        return self.send_command("M84")
+    
+    def setup(self):
+        """Send setup commands to the printer."""
+        commands = [
+            "G28 Y",  # Home all axes
+            "M84",  # Disable motors
+            "G28 X",
+            "M84",
+            "M204 T1500",  # Set acceleration
+            "M84",
+            "G4 P500",
+            "G1 F6000",  # Set feedrate
+            "G4 P500"
+        ]
+        for command in commands:
+            response = self.send_command(command)
+            if "echo" in response:
+                return f"E: Setup failed with command '{command}': {response}"
+        return "OK"
+    
+    def print_braille_point(self, x, y):
+        """Print a Braille dot at specified coordinates."""
+        movement_command = f"G1 X{x:.2f} Y{y:.2f}"
+        response = self.send_command(movement_command)
+        commands = [
+            "M84",
+            "M5",  
+            "G4 P250",
+            "M3",
+            "G4 P250",
+            "M5",
+            "G4 P250",
+            "M3",
+            "G4 P250",
+            "M5",
+            "G4 P250",
+            "M3",
+        ]
+        for command in commands:
+            response = self.send_command(command)
+            if "echo" in response:
+                return False
+        return True
+    
+    def print_braille_points(self, coordinates):
+        """Print multiple Braille dots efficiently."""
+        success = True
+        total_points = len(coordinates)
+        printed = 0
+        
+        print(f"Starting to print {total_points} Braille points...")
+        
+        # Home the printer first
+        home_response = self.setup()
+        if not home_response.startswith("ok"):
+            return False
+            
+        for x, y in coordinates:
+            if not self.print_braille_point(x, y):
+                print(f"Failed to print point at ({x}, {y})")
+                success = False
+            else:
+                printed += 1
+                if printed % 10 == 0:
+                    print(f"Progress: {printed}/{total_points} points printed")
+        
+        print(f"Braille printing complete: {printed}/{total_points} points printed")
+        return success

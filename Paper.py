@@ -115,8 +115,8 @@ class Paper:
     
     def get_text(self):
         print("Extracting and rotating image...")
-        self.update_corners()
-        image = self.image.extract_and_rotate(self.corners_px, self.width_mm, self.height_mm)
+        image = self.image.extract_and_rotate(self.image.corners_dict)
+
         self.paper_image = PaperImage(image, self.image_config, self.width_mm, self.height_mm)
         print("Image extracted and rotated.")
         print("Extracting text from image...")

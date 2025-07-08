@@ -68,10 +68,10 @@ class CornerImage(Image):
         largest_edge = get_largest_edge(edges_final)
         
         image_with_largest_edge = self.image.copy()
-        image_with_largest_edge = cv2.rotate(image_with_largest_edge, cv2.ROTATE_270)
+        image_with_largest_edge = cv2.rotate(image_with_largest_edge, cv2.ROTATE_90_COUNTERCLOCKWISE)
         
         image_with_polygon = self.image.copy()
-        image_with_polygon = cv2.rotate(image_with_polygon, cv2.ROTATE_270)
+        image_with_polygon = cv2.rotate(image_with_polygon, cv2.ROTATE_90_COUNTERCLOCKWISE)
         
         if largest_edge is not None:
             print("Polygon detected")

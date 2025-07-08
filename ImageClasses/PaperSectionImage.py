@@ -45,7 +45,7 @@ class PaperSectionImage(Image):
             raise ValueError("No image to process")
         if len(self.image.shape) == 3 and self.image.shape[2] == 4:
           self.image = cv2.cvtColor(self.image, cv2.COLOR_BGRA2BGR)
-        rotated = cv2.rotate(self.image, cv2.ROTATE_270)
+        rotated = cv2.rotate(self.image, cv2.ROTATE_90_COUNTERCLOCKWISE)
         self.original_img = rotated.copy()
         self.create_mask(rotated)
         img_flat = rotated.reshape(-1, 3)
@@ -54,7 +54,7 @@ class PaperSectionImage(Image):
         result = rotated.copy()
         result[self.mask == 255] = darkest_color
         gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
-        binary = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)[1]
+        binary = cv2.threshold(gray, 80, 255, cv2.THRESH_BINARY)[1]
         self.image = binary
         self.get_red_polygons_contours()
     

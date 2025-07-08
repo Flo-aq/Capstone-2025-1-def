@@ -97,21 +97,21 @@ class BrailleToCoordinates:
         for line in lines:
             braille_chars = line.split()
             
-            current_x = self.MARGIN
-            current_y += self.d
+            current_y = self.MARGIN
+            current_x += self.d
             current_line_chars = 0
             
             for braille_char in braille_chars:
-                if current_y > (self.LETTER_HEIGHT - self.MARGIN - self.d):
+                if current_x > (self.LETTER_HEIGHT - 2*self.MARGIN - self.d):
                     self.all_coordinates.append(current_page_coordinates)
                     current_page_coordinates = []
-                    current_y += 2 * self.MARGIN
+                    current_y = self.MARGIN
                     current_x = self.MARGIN
                     current_line_chars = 0
                 
                 if current_line_chars >= self.chars_per_line:
-                    current_y += self.d
-                    current_x = self.MARGIN
+                    current_x += self.d
+                    current_y = self.MARGIN
                     current_line_chars = 0
                 
                 for i in range(6):
@@ -119,15 +119,14 @@ class BrailleToCoordinates:
                         col = i // 3
                         row = i % 3
                         
-                        center_x = current_x + (col * self.a)
-                        center_y = current_y + (row * self.b)
+                        center_x = current_x + (row * self.b)
+                        center_y = current_y + (col * self.a)
                         
                         current_page_coordinates.extend(self.generate_point(center_x, center_y))
                 
-                current_x += self.c
+                current_y += self.c
                 current_line_chars += 1
             
-            current_y += self.d
         
         if current_page_coordinates:
             self.all_coordinates.append(current_page_coordinates)
@@ -135,27 +134,34 @@ class BrailleToCoordinates:
         return 
     
     def sort_coordinates(self):
+        self.sorted_coordinates = []
+        
         for page in self.all_coordinates:
+            # Agrupar por coordenada X (líneas horizontales)
             lines = {}
             for coord in page:
-                try:
-                    lines[coord[1]].append(coord)
-                except KeyError:
-                    lines[coord[1]] = [coord]
-                    
-            sorted_y = sorted(lines.keys())
+                x_key = coord[0]  # Usar X como clave para líneas horizontales
+                if x_key not in lines:
+                    lines[x_key] = []
+                lines[x_key].append(coord)
             
+            # Ordenar líneas por coordenada X (de arriba hacia abajo)
+            sorted_x = sorted(lines.keys())
+            
+            # Aplicar patrón serpentina
             sorted_lines = []
-            for y in sorted_y:
-                if self.start == "left":
-                    sorted_line = sorted(lines[y], key=lambda coord: coord[0])
-                    sorted_lines.extend(sorted_line)
-                    self.start = "right"
-                else:
-                    sorted_line = sorted(lines[y], key=lambda coord: coord[0], reverse=True)
-                    sorted_lines.extend(sorted_line)
-                    self.start = "left"
+            for idx, x in enumerate(sorted_x):
+                line_coords = lines[x]
+                # Alternar dirección: pares de izquierda a derecha, impares de derecha a izquierda
+                if idx % 2 == 0:  # Líneas pares
+                    sorted_line = sorted(line_coords, key=lambda coord: coord[1])  # Ordenar por Y creciente
+                else:  # Líneas impares
+                    sorted_line = sorted(line_coords, key=lambda coord: coord[1], reverse=True)  # Ordenar por Y decreciente
+                
+                sorted_lines.extend(sorted_line)
+            
             self.sorted_coordinates.extend(sorted_lines)
-        return
+        
+        return 
 
 

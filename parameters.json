@@ -30,7 +30,7 @@
   "first_module": {
     "kernel_size": 101,
     "sigma": 0,
-    "low_threshold": 100,
+    "low_threshold": 80,
     "high_threshold": 200,
     "border_size": 40
   },

@@ -1,7 +1,5 @@
 
-from copy import copy
-from hmac import new
-from turtle import update
+import copy
 import numpy as np
 from shapely import Point, unary_union
 from shapely.geometry import Polygon, box
@@ -115,7 +113,7 @@ def update_grid_distances_and_availability(grid, covered_regions, step, exclusio
         return
 
     covered_area = unary_union(covered_regions)
-    buffer_offset = -step * 25
+    buffer_offset = -step * 35
     covered_area_buffered = covered_area.buffer(buffer_offset)
 
     for grid_key, grid_info in grid.items():
@@ -144,6 +142,9 @@ def get_candidates_from_grid(grid, polygon_geom, covered_regions, min_overlap, m
             continue
         position = grid_info['position']
         fov_box = grid_info['fov_box']
+        
+      
+        
         covered_background = covered_area.difference(polygon_geom)
         fov_background = fov_box.difference(polygon_geom)
         background_overlap = covered_background.intersection(fov_background)
@@ -163,12 +164,12 @@ def get_candidates_from_grid(grid, polygon_geom, covered_regions, min_overlap, m
 
 def calculate_photo_positions_with_tree(polygon, fov_width, fov_height, composite_img_height, composite_img_width, min_overlap, max_candidates, max_depth):
     step = int(fov_width / 25)
-    polygon_coords = [(float(point[0][0]), float(point[0][1])) for point in polygon]
+    polygon_coords = [(float(point[0]), float(point[1])) for point in polygon]
     polygon_geom = Polygon(polygon_coords).buffer(0)
     
     grid, x_positions, y_positions = create_initial_grid(polygon_geom, fov_width, fov_height, composite_img_width, composite_img_height, step)
     
-    corners_ordered = order_corners_by_distance_to_edge(polygon_geom, composite_img_width, composite_img_height)
+    corners_ordered = order_corners_by_distance_to_edge(polygon_geom, fov_width, fov_height, composite_img_width, composite_img_height)
     best_initial = corners_ordered[0]
     
     initial_fov = create_fov_box(best_initial, fov_width, fov_height)
@@ -201,7 +202,7 @@ def calculate_photo_positions_with_tree(polygon, fov_width, fov_height, composit
         
         for candidate_pos, weight, overlap, new_pol in candidates:
             new_grid = copy.deepcopy(grid_state)
-            new_fov = create_fov_box(candidate_pos, (fov_width, fov_height))
+            new_fov = create_fov_box(candidate_pos, fov_width, fov_height)
             new_regions = regions + [new_fov]
             new_positions = positions + [candidate_pos]
             exclusion_range = get_exclusion_range(x_positions, y_positions, candidate_pos)

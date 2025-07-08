@@ -15,7 +15,7 @@ def first_module_process_image(image, kernel_size, sigma):
     """
     if len(image.shape) == 3 and image.shape[2] == 4:
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
-    rotated = cv2.rotate(image, cv2.ROTATE_270)
+    rotated = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
     
     print(image.shape)
     img_flat = rotated.reshape(-1, 3)
@@ -33,7 +33,7 @@ def first_module_process_image(image, kernel_size, sigma):
     
     gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (kernel_size, kernel_size), sigma)
-    binary = cv2.threshold(blurred, 100, 255, cv2.THRESH_BINARY)[1]
+    binary = cv2.threshold(blurred, 80, 255, cv2.THRESH_BINARY)[1]
     
     return binary
 
