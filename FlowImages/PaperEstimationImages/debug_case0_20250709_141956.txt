@@ -1,0 +1,12 @@
+unique_corners:
+[array([ 549, 2212]), array([1772,  158]), array([3875,  933]), array([2654, 2985]), array([3734, 1170]), array([ 706, 1949]), array([2476, 3285])]
+
+grouped_lines:
+{27.356652335864766: [(array([2463,  516], dtype=int32), array([1773,  159], dtype=int32)), ([4646, 1338], [3876, 934]), ([2656, 2986], [4646, 4044]), (array([ 550, 2213], dtype=int32), array([2463, 3279], dtype=int32))], 120.73325751315812: [([3876, 934], [2656, 2986]), (array([1773,  159], dtype=int32), array([ 550, 2213], dtype=int32))]}
+
+bottom_image.lines:
+[([3876, 934], [2656, 2986]), ([2656, 2986], [4646, 4044]), ([4646, 1338], [3876, 934])]
+
+top_image.lines:
+[(array([1773,  159], dtype=int32), array([ 550, 2213], dtype=int32)), (array([ 550, 2213], dtype=int32), array([2463, 3279], dtype=int32)), (array([2463,  516], dtype=int32), array([1773,  159], dtype=int32))]
+
