@@ -45,10 +45,10 @@ const int HOMING_BACK_DISTANCE = 10 * STEPS_PER_MM;
 const unsigned long TIMEOUT_STEPS_X = 300 * STEPS_PER_MM;
 const unsigned long TIMEOUT_STEPS_Y = 300 * STEPS_PER_MM;
 ////////////////////////////////////////////////////////////////
-int MIN_DISTANCE_TOF_X = 20;
+int MIN_DISTANCE_TOF_X = 130;
 int MIN_DISTANCE_TOF_Y = 20;
-int MAX_DISTANCE_TOF_X = 100;
-int MAX_DISTANCE_TOF_Y = 100;
+int MAX_DISTANCE_TOF_X = 339;
+int MAX_DISTANCE_TOF_Y = 166;
 ////////////////////////////////////////////////////////////////
 const int MOVE_SPEED = 60;//100
 ////////////////////////////////////////////////////////////////
@@ -67,11 +67,11 @@ const int PRECISION_THRESHOLD_OFF = 25; // Umbral para desactivar (más grande)
 const float ORIGIN_OFFSET_X = 48; // Ajusta según la posición real del origen
 const float ORIGIN_OFFSET_Y = 105; // Ajusta según la posición real del origen
 ////////////////////////////////////////////////////////////////
-float kp = 0.8;
-float ki = 0.1;
-float kd = 0.4;
+float kp = 0.2;
+float ki = 0.04;
+float kd = 0.2;
 
-const int MAX_ITERATIONS_PID = 500;
+const int MAX_ITERATIONS_PID = 10;
 
 String inputBuffer = "";
 bool commandComplete = false;
@@ -202,7 +202,6 @@ void processCommand(String command) {
       Serial.println("E: HOMING FAILED");
       return;
     }
-    Serial.println(ORIGIN_OFFSET_Y);
     current_pos_x = 0.0;
     current_pos_y = 0.0;
     
@@ -239,12 +238,10 @@ void processCommand(String command) {
       return;
     }
     int distance = readAverageTofDistance(tofSensorX, 6);
-    if (distance < 0) {
-      Serial.println("E: Invalid TOF X reading");
-    } else {
-      Serial.print("OK: ");
-      Serial.println(distance);
-    }
+  
+    Serial.print("OK: ");
+    Serial.println(distance);
+    
   } else if (command == "TOFY") {
     // Solo leer el sensor Y
     if (!sensorTofYOk) {
@@ -252,12 +249,11 @@ void processCommand(String command) {
       return;
     }
     int distance = readAverageTofDistance(tofSensorY, 6);
-    if (distance < 0) {
-      Serial.println("E: Invalid TOF Y reading");
-    } else {
-      Serial.print("OK: ");
-      Serial.println(distance);
-    }
+    
+
+    Serial.print("OK: ");
+    Serial.println(distance);
+    
   } 
   else if (command.startsWith("SET KP ")) {
     kp = command.substring(7).toFloat();
@@ -625,191 +621,286 @@ int readAverageTofDistance(VL53L0X& sensor, int numSamples = 12) {
 
 // Simple PID-controlled movement using TOF sensors
 void moveWithPID(float targetDistance, int stepPin, int dirPin, VL53L0X& sensor, int endstopPin, bool isXaxis, bool showPrints) {
-  if (abs(targetDistance) < 50) {
+  // if targetDistance is less than 10 mm, complete movement with moveMM
+  if (isXaxis && current_pos_x + targetDistance < MIN_POS_X) {
+    targetDistance = MIN_POS_X - current_pos_x;
+  } else if (isXaxis && current_pos_x + targetDistance > MAX_POS_X) {
+    targetDistance = MAX_POS_X - current_pos_x;
+  } else if (!isXaxis && current_pos_y + targetDistance < MIN_POS_Y) {
+    targetDistance = MIN_POS_Y - current_pos_y;
+  } else if (!isXaxis && current_pos_y + targetDistance > MAX_POS_Y) {
+    targetDistance = MAX_POS_Y - current_pos_y;
+  }
+
+  if (targetDistance == 0) {
+    Serial.println("OK: 0");
+    return;
+  }
+  if (abs(targetDistance) < 10) {
     if (showPrints) {
       Serial.println("Small distance detected, using direct movement");
     }
     moveMM(stepPin, dirPin, targetDistance, isXaxis);
     return;
   }
+  // if i want to move towards the endstop, check if the endstop is triggered
+  if (targetDistance > 0 && digitalRead(endstopPin) == LOW) {
+    Serial.println("OK: 0");
+    return;
+  } 
+
   if (showPrints) {
     Serial.print("PID movement: ");
     Serial.print(targetDistance);
     Serial.println(" mm");
   }
-  
+  // check if the sensor is initialized
   bool& sensorOk = isXaxis ? sensorTofXOk : sensorTofYOk;
   if (!sensorOk) {
-    Serial.println("E: TOF sensor not initialized");
-    return;
-  }
-  
-  // Get initial TOF distance (average of readings)
-  int initialTofDistance = readAverageTofDistance(sensor);
-  if (initialTofDistance < 0) {
-    Serial.println("E: Invalid initial TOF reading");
-    return;
-  }
-  
-  const int MIN_TOF_DISTANCE = isXaxis ? MIN_DISTANCE_TOF_X : MIN_DISTANCE_TOF_Y;
-  const int MAX_TOF_DISTANCE = isXaxis ? MAX_DISTANCE_TOF_X : MAX_DISTANCE_TOF_Y;
-
-  if (initialTofDistance - targetDistance < MIN_TOF_DISTANCE) {
-    targetDistance = -MIN_TOF_DISTANCE + initialTofDistance;
-  } else if (initialTofDistance - targetDistance > MAX_TOF_DISTANCE) {
-    targetDistance = -MAX_TOF_DISTANCE + initialTofDistance;
-  } 
-
-  float targetTofDistance = initialTofDistance - targetDistance;
-
-  if (targetTofDistance < 25) {
+    if (showPrints) {
+      Serial.println("E: TOF sensor not initialized");
+    }
     moveMM(stepPin, dirPin, targetDistance, isXaxis);
     return;
   }
-  // Enable motors
-  digitalWrite(EN_PIN, LOW);
-  delay(100);
   
-  int iterations = 0;
-  unsigned long totalSteps = 0;
-    
+  // Get initial TOF distance (average of readings) and check if it's valid
+  int initialTofDistance = readAverageTofDistance(sensor);
+  if (initialTofDistance < 0 || initialTofDistance > 400) {
+    if (showPrints) {
+      Serial.println("E: Invalid TOF reading");
+    }
+    moveMM(stepPin, dirPin, targetDistance, isXaxis);
+    return;
+  }
+
+  
+  
+  int objectiveTofReading = initialTofDistance - int(targetDistance);
+  bool moveDirection = (targetDistance > 0);
+  bool approachCompleted = false;
+  int iteration = 0;
+  int currentTofReading = initialTofDistance;
+
+  float error = 0.0;
+  float previousError = 0.0;
+  float integral = 0.0;
+  float derivative = 0.0;
+  float output = 0.0;
+
+  if (isXaxis) {
+    digitalWrite(dirPin, moveDirection ? LOW : HIGH);
+  } else {
+    digitalWrite(dirPin, moveDirection ? HIGH : LOW);
+  }
+
+  const int MIN_STEP_DELAY = 15;  // Máxima velocidad (menor delay)
+  const int MAX_STEP_DELAY = 100;
+  int stepDelay = MIN_STEP_DELAY; // Start with maximum speed
+  float totalMovedDistance = 0.0;
+
   if (showPrints) {
     Serial.print("Initial TOF: ");
     Serial.print(initialTofDistance);
     Serial.print(" mm, Target TOF: ");
-    Serial.print(targetTofDistance);
+    Serial.print(objectiveTofReading);
     Serial.println(" mm");
   }
   
-  bool moveTowardsEndstop = (targetDistance > 0);
-  if (isXaxis) {
-    digitalWrite(dirPin, moveTowardsEndstop ? LOW : HIGH);
+
+  if (showPrints) {
+    Serial.println("====== PID MOVEMENT START ======");
+    Serial.print("Target distance: ");
+    Serial.print(targetDistance);
+    Serial.print(" mm, Axis: ");
+    Serial.println(isXaxis ? "X" : "Y");
+    Serial.println("IT\tTOF\tERROR\tINTG\tDERIV\tOUTPUT\tDIR\tSTEPS\tIT DIST\tTOTAL STEPS\tTOTAL DIST\tDELAY");
+  }
+  
+  digitalWrite(EN_PIN, LOW);
+  delay(50);
+  
+  while (iteration < MAX_ITERATIONS_PID && !approachCompleted) {
+      currentTofReading = readAverageTofDistance(sensor);
+      if (currentTofReading < 0 || currentTofReading > 400) {
+        if (showPrints) {
+          Serial.println("E: Invalid TOF reading during PID loop");
+        }
+        approachCompleted = true;
+        break;
+      }
+      error = currentTofReading - objectiveTofReading;
+      if (abs(error) <= 10) {
+        approachCompleted = true;
+      }
+      if (!approachCompleted) {
+        // Calculate PID control values
+        integral += error;
+        derivative = error - previousError;
+        output = kp * error + ki * integral + kd * derivative;
+        integral = constrain(integral, -100, 100); // Prevent integral windup
+        if (error * previousError < 0) {
+          integral = 0; // Reset integral if error changes sign
+        }
+        output = constrain(output, -100, 100);
+        if (output > 0) {
+          if (isXaxis && current_pos_x + output > MAX_POS_X) {
+            output = MAX_POS_X - current_pos_x;
+          } else if (!isXaxis && current_pos_y + output > MAX_POS_Y) {
+            output = MAX_POS_Y - current_pos_y;
+          }
+          moveDirection = true;
+        } else {
+          if (isXaxis && current_pos_x + output < MIN_POS_X) {
+            output = MIN_POS_X - current_pos_x;
+          } else if (!isXaxis && current_pos_y + output < MIN_POS_Y) {
+            output = MIN_POS_Y - current_pos_y;
+          }
+          moveDirection = false;
+        }
+        // map stepDelay according to output
+        unsigned long stepsToMake = abs(output) * STEPS_PER_MM;
+        if (isXaxis) {
+          digitalWrite(dirPin, moveDirection ? LOW : HIGH);
+        } else {
+          digitalWrite(dirPin, moveDirection ? HIGH : LOW);
+        }
+
+
+        float absOutput = abs(output);
+        if (absOutput <= 5) {
+          stepDelay = MAX_STEP_DELAY; // Movimiento lento para pequeños ajustes
+        } else if (absOutput >= 100) {
+          stepDelay = MIN_STEP_DELAY; // Movimiento rápido para grandes correcciones
+        } else {
+          // Mapeo lineal entre 10-100 de output a 300-15 de delay (nota la inversión)
+          stepDelay = map(constrain(absOutput,5,30), 5, 30, MAX_STEP_DELAY, MIN_STEP_DELAY);
+        }
+        unsigned long stepsMadeThisIteration = 0;
+        float movedDistance = 0.0;
+        if (stepsToMake > 30000) {
+          for (int i = 0; i < 5000; i++) {
+            if (digitalRead(endstopPin) == LOW && !moveDirection) {
+              approachCompleted = true;
+              break;
+            }
+            makeStep(stepPin, stepDelay);
+            stepsMadeThisIteration++;
+          }
+          stepsToMake -= 5000;
+        }
+        if (stepsToMake > 25000) {
+          for (int i = 0; i < 5000; i++) {
+            if (digitalRead(endstopPin) == LOW && !moveDirection) {
+              approachCompleted = true;
+              break;
+            }
+            makeStep(stepPin, stepDelay);
+            stepsMadeThisIteration++;
+          }
+          stepsToMake -= 5000;
+        }
+        if (stepsToMake > 20000) {
+          for (int i = 0; i < 5000; i++) {
+            if (digitalRead(endstopPin) == LOW && !moveDirection) {
+              approachCompleted = true;
+              break;
+            }
+            makeStep(stepPin, stepDelay);
+            stepsMadeThisIteration++;
+          }
+          stepsToMake -= 5000;
+        }
+        if (stepsToMake > 15000) {
+          for (int i = 0; i < 5000; i++) {
+            if (digitalRead(endstopPin) == LOW && !moveDirection) {
+              approachCompleted = true;
+              break;
+            }
+            makeStep(stepPin, stepDelay);
+            stepsMadeThisIteration++;
+          }
+          stepsToMake -= 5000;
+        }
+        if (stepsToMake > 10000) {
+          for (int i = 0; i < 5000; i++) {
+            if (digitalRead(endstopPin) == LOW && !moveDirection) {
+              approachCompleted = true;
+              break;
+            }
+            makeStep(stepPin, stepDelay);
+            stepsMadeThisIteration++;
+          }
+          stepsToMake -= 5000;
+        }
+        for (int i = 0; i < stepsToMake; i++) {
+          if (digitalRead(endstopPin) == LOW && !moveDirection) {
+            approachCompleted = true;
+            break;
+          }
+          makeStep(stepPin, stepDelay);
+          stepsMadeThisIteration++;
+        }
+        if (moveDirection) {
+          movedDistance += stepsMadeThisIteration / STEPS_PER_MM;
+          totalMovedDistance += movedDistance;
+        } else {
+          movedDistance -= stepsMadeThisIteration / STEPS_PER_MM;
+          totalMovedDistance -= movedDistance;
+        }
+        
+        if (isXaxis) {
+          current_pos_x += movedDistance;
+        } else {
+          current_pos_y += movedDistance;
+        }
+        if (showPrints) {
+          Serial.print(iteration);
+          Serial.print("\t");
+          Serial.print(currentTofReading);
+          Serial.print("\t");
+          Serial.print(error);
+          Serial.print("\t");
+          Serial.print(integral);
+          Serial.print("\t");
+          Serial.print(derivative);
+          Serial.print("\t");
+          Serial.print(output);
+          Serial.print("\t");
+          Serial.print(moveDirection ? "+" : "-");
+          Serial.print("\t");
+          Serial.print(stepsMadeThisIteration);
+          Serial.print("\t");
+          Serial.print(movedDistance, 2);
+          Serial.print("\t");
+          Serial.print("\t");
+          Serial.print(totalMovedDistance, 2);
+          Serial.print("\t");
+          Serial.print("\t");
+          Serial.println(stepDelay);
+        }
+        previousError = error;
+        iteration++;
+      }
+  }
+  if (showPrints) {
+    Serial.println("==== PID SUMMARY ====");
+    Serial.print("Iterations: ");
+    Serial.print(iteration);
+    Serial.print(", Distance moved: ");
+    Serial.print(totalMovedDistance);
+    Serial.print(" mm, Final error: ");
+    Serial.print(error);
+    Serial.println(" mm");
+  }
+  if (abs(targetDistance) > totalMovedDistance) {
+    delay(500);
+    float toMove = targetDistance > 0 ? (targetDistance - totalMovedDistance) : -(abs(targetDistance) - totalMovedDistance);
+    moveMM(stepPin, dirPin, toMove, isXaxis);
+    return;
   } else {
-    digitalWrite(dirPin, moveTowardsEndstop ? HIGH : LOW);
+    Serial.print("OK: ");
+    Serial.println(totalMovedDistance);
+    stopMotors();
   }
-  
-  // Initialize PID variables
-  float error = 0;
-  float prevError = 0;
-  float integral = 0;
-  int currentTofDistance = initialTofDistance;
-  bool approachComplete = false;
-  bool highPrecisionMode = false;
-
-  int minStepDelay = 15;
-  int maxStepDelay = 350;
-  int stepDelay = 60; // Start with minimum delay
-  
-  bool currentDirection = moveTowardsEndstop; // True if moving towards endstop, false otherwise
-  Serial.println(">> IT\tDIST\tERROR\tINTG\tDERIV\tOUTPUT\tPASOS");  // PRINT TEMPORAL
-
-  while (iterations < MAX_ITERATIONS_PID) {
-    if (digitalRead(endstopPin) == LOW) {
-      Serial.println("E: PHYSICAL LIMIT");
-      stopMotors();
-      return;
-    }
-
-    currentTofDistance = readAverageTofDistance(sensor);
-    if (currentTofDistance < 0) {
-      Serial.println("E: Invalid TOF reading");
-      stopMotors();
-      approachComplete = true;
-      break;
-    }
-    error = targetTofDistance - currentTofDistance;
-
-    if (abs(error) < 25) {
-      if (showPrints) {
-        Serial.println("E: PID error below threshold, stopping movement");
-      }
-      approachComplete = true;
-
-      break; // Stop if error is small enough
-    }
-
-    integral += error;
-    integral = constrain(integral, -1000, 1000); // Limit integral to prevent windup
-
-    float derivative = error - prevError;
-    prevError = error;
-
-    float output = kp * error + ki * integral + kd * derivative;
-
-    currentDirection = (output > 0);
-    if (isXaxis) {
-      digitalWrite(dirPin, currentDirection ? LOW : HIGH);
-    } else {
-      digitalWrite(dirPin, currentDirection ? HIGH : LOW);
-    }
-
-    int stepsToMove = max(1, abs(constrain(output, -200, 200)) / STEPS_PER_MM);
-
-    stepDelay = map(constrain(abs(error), 25, 200), 25, 200, maxStepDelay, minStepDelay);
-
-    if (showPrints) {
-      Serial.print(iterations);
-      Serial.print("\t");
-      Serial.print(currentTofDistance);
-      Serial.print("\t");
-      Serial.print(error);
-      Serial.print("\t");
-      Serial.print(integral);
-      Serial.print("\t");
-      Serial.print(derivative);
-      Serial.print("\t");
-      Serial.print(output);
-      Serial.print("\t");
-      Serial.println(stepsToMove);
-    }
-
-    for (int i = 0; i < stepsToMove && !approachComplete; i++) {
-      float nextPos = isXaxis ? current_pos_x : current_pos_y;
-      nextPos += currentDirection ? 1.0/STEPS_PER_MM : -1.0/STEPS_PER_MM;
-
-      if ((isXaxis && (nextPos < MIN_POS_X || nextPos > MAX_POS_X)) || 
-          (!isXaxis && (nextPos < MIN_POS_Y || nextPos > MAX_POS_Y))) {
-        Serial.println("E: POSITION LIMIT");
-        approachComplete = true;
-        break;
-      }
-
-      makeStep(stepPin, stepDelay);
-      totalSteps++;
-      
-      if (isXaxis) {
-        current_pos_x += currentDirection ? 1.0/STEPS_PER_MM : -1.0/STEPS_PER_MM;
-      } else {
-        current_pos_y += currentDirection ? 1.0/STEPS_PER_MM : -1.0/STEPS_PER_MM;
-      }
-      
-      // Check endstop
-      if (digitalRead(endstopPin) == LOW) {
-        Serial.println("E: ENDSTOP HIT");
-        approachComplete = true;
-        break;
-      }
-    }
-
-    iterations++;
-    delay(10);
-
-  }
-  float movedDistance = (float)totalSteps / STEPS_PER_MM;
-  if (!currentDirection) {  // Si la dirección final era negativa
-    movedDistance = -movedDistance;
-  }
-  
-  // Move remaining distance directly
-  float remainingDistance = targetDistance - movedDistance;
-  
-  if (abs(remainingDistance) > 2.0) { // Only move if remaining distance is significant
-    if (showPrints) {
-      Serial.print("PID complete. Moving remaining distance: ");
-      Serial.println(remainingDistance);
-    }
-    moveMM(stepPin, dirPin, remainingDistance, isXaxis);
-  }
-  
-  stopMotors();
 }
