@@ -163,7 +163,7 @@ def get_candidates_from_grid(grid, polygon_geom, covered_regions, min_overlap, m
     return candidates[:max_candidates]
 
 def calculate_photo_positions_with_tree(polygon, fov_width, fov_height, composite_img_height, composite_img_width, min_overlap, max_candidates, max_depth):
-    step = int(fov_width / 25)
+    step = int(fov_width / 15)
     polygon_coords = [(float(point[0]), float(point[1])) for point in polygon]
     polygon_geom = Polygon(polygon_coords).buffer(0)
     

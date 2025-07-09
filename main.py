@@ -234,22 +234,22 @@ class Main:
         print("Creating paper image...")
             
         self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config, stitcher=self.image_stitcher)
-        # # print("Creating paper image...")
-        # # self.paper.image.create_image()
-        # self.paper.get_text()
-        # self.paper.translate_text()
-        # print("Text captured and translated.")
-        # print("Generating braille coordinates...")
-        # self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
-        # self.braille_converter.sort_coordinates()
-        # print(self.braille_converter.sorted_coordinates[:10])  # Print first 10 coordinates for debugging
-        # success = self.device_manager.arduino_mega_printer.print_braille_points(self.braille_converter.sorted_coordinates[:10])
-        # if success:
-        #     print("Braille printing completed successfully!")
-        # else:
-        #     print("E: Braille printing failed")
+        # print("Creating paper image...")
+        # self.paper.image.create_image()
+        self.paper.get_text()
+        self.paper.translate_text()
+        print("Text captured and translated.")
+        print("Generating braille coordinates...")
+        self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
+        self.braille_converter.sort_coordinates()
+        print(self.braille_converter.sorted_coordinates[:min(100, len(self.braillesorted_coordinates))])  # Print first 10 coordinates for debugging
+        success = self.device_manager.arduino_mega_printer.print_braille_points(self.braille_converter.sorted_coordinates)
+        if success:
+            print("Braille printing completed successfully!")
+        else:
+            print("E: Braille printing failed")
         
-        # return success
+        return success
 
 if __name__ == "__main__":
     main = Main()
