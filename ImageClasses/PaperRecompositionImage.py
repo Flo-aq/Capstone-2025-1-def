@@ -35,8 +35,10 @@ class PaperRecompositionImage(Image):
         # Realizar el stitching y obtener todos los valores devueltos
         directory = join("FlowImages", "single_images_to_stitch", "stitching")
         os.makedirs(directory, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
         for i, img in enumerate(self.images):
-            output_path = join(directory, f"image_{i}.jpg")
+            output_path = join(directory, f"image_{i}_{timestamp}.jpg")
             cv2.imwrite(output_path, img)
         result = self.image_stitcher.stitch_images(self.images)
     
