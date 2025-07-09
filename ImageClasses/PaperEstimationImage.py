@@ -151,6 +151,24 @@ class PaperEstimationImage(Image):
         """
         self.get_lines()
         if self.case == 0:
+            debug_dir = "FlowImages/PaperEstimationImages"
+            os.makedirs(debug_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            debug_filename = join(debug_dir, f"debug_case0_{timestamp}.txt")
+            with open(debug_filename, "w") as f:
+                f.write("unique_corners:\n")
+                f.write(str(self.unique_corners) + "\n\n")
+                f.write("grouped_lines:\n")
+                f.write(str(self.grouped_lines) + "\n\n")
+                f.write("bottom_image.lines:\n")
+                f.write(str(self.bottom_image.lines) + "\n\n")
+                f.write("top_image.lines:\n")
+                f.write(str(self.top_image.lines) + "\n\n")
+                # Si tienes original_bottom_lines disponible, guárdalo también
+                if hasattr(self.bottom_image, "original_lines"):
+                    f.write("original_bottom_lines:\n")
+                    f.write(str(self.bottom_image.original_lines) + "\n\n")
+
             polygon = find_polygon_from_intersections(self.unique_corners) if len(self.unique_corners) >= 3 else []
             return standardize_polygon(polygon)
         
@@ -353,6 +371,9 @@ class PaperEstimationImage(Image):
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         plt.savefig(filename, facecolor=fig.get_facecolor(), dpi=150)
         plt.close()
+        
+        composite_img_filename = join(save_dir, f"CompositeOnly_{timestamp}.png")
+        cv2.imwrite(composite_img_filename, self.image)
 
     def save_polygon_visualization(self):
         if len(self.polygon) == 0:

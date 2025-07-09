@@ -57,6 +57,19 @@ class ImageStitcher:
             paper_contour, paper_mask, img_without_background = self.get_paper_polygon_from_stitched_img(
                 images[0])
             return images[0], paper_contour, paper_mask
+        
+        if len(images) == 8:
+            print("Procesando 8 imágenes en dos grupos de 4...")
+            panorama1 = self.stitch_images(images[:4])
+            panorama2 = self.stitch_images(images[4:])
+            if panorama1 is None or panorama2 is None:
+                print("Error al hacer stitching de los grupos de 4 imágenes")
+                return None
+            # panorama1 y panorama2 pueden ser tuplas (panorama, contour, mask)
+            # Solo nos interesa la imagen panorámica para el siguiente paso
+            stitched_imgs = [panorama1[0], panorama2[0]]
+            print("Uniendo los dos panoramas resultantes...")
+            return self.stitch_images(stitched_imgs)
 
         print(f"Stitching {len(images)} images using OpenCV stitcher...")
         start_time = time.time()
@@ -68,9 +81,9 @@ class ImageStitcher:
                 if img is None:
                     print(f"Warning: Image {i} is None, skipping")
                     continue
-                    
+
                 print(f"Processing image {i}: shape={img.shape}, dtype={img.dtype}")
-                
+
                 # Asegurar formato BGR
                 if len(img.shape) == 2:  # Escala de grises
                     print(f"  Converting image {i} from grayscale to BGR")
@@ -80,7 +93,7 @@ class ImageStitcher:
                     img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
                 elif img.shape[2] != 3:
                     print(f"  Warning: Image {i} has unusual number of channels: {img.shape[2]}")
-                    
+
                 formatted_images.append(img)
                 print(f"  Image {i} added to formatted_images, now have {len(formatted_images)} images")
             formatted_images.append(formatted_images[0])  # Añadir la primera imagen al final para cerrar el ciclo
@@ -119,7 +132,6 @@ class ImageStitcher:
         except Exception as e:
             print(f"Error durante el stitching: {str(e)}")
             return None
-
     def save_debug_masks(self, img1_resized, img2_resized, combined_mask_1, combined_mask_2):
         """
         Save debug images of combined masks and visualizations to the debug_imgs folder.

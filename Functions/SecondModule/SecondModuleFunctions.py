@@ -179,7 +179,7 @@ def find_intersections_between_groups(group1_lines, group2_lines, canvas_shape, 
     return np.array(list(unique_intersections))
 
 
-def extend_all_lines_and_find_corners(img, all_lines, extension_length=1000, tolerance=100):
+def extend_all_lines_and_find_corners(img, all_lines, extension_length=1000, tolerance=150):
     """
     Extends all lines and finds their intersection points to determine corners.
 
@@ -201,6 +201,20 @@ def extend_all_lines_and_find_corners(img, all_lines, extension_length=1000, tol
 
     grouped_lines = group_lines_by_angle(extended_lines)
     angles = sorted(grouped_lines.keys())
+    best_pair = None
+    best_diff = float('inf')
+    for i in range(len(angles)):
+        for j in range(i+1, len(angles)):
+            diff = abs((angles[i] - angles[j]) % 180)
+            diff = min(diff, 180 - diff)  # Asegura que la diferencia esté en [0, 90]
+            if abs(diff - 90) < best_diff:
+                best_diff = abs(diff - 90)
+                best_pair = (angles[i], angles[j])
+
+    # Filtrar grouped_lines para dejar solo los dos grupos más perpendiculares
+    if best_pair:
+        grouped_lines = {angle: grouped_lines[angle] for angle in best_pair}
+        angles = list(best_pair)
 
     all_intersections = []
     for i in range(len(angles)):
@@ -214,14 +228,23 @@ def extend_all_lines_and_find_corners(img, all_lines, extension_length=1000, tol
                 all_intersections.extend(intersections)
 
     unique_corners = []
+    img_center = np.array([img.shape[1] / 2, img.shape[0] / 2])
     for intersection in all_intersections:
         is_unique = True
-        for existing_corner in unique_corners:
+        replace_idx = None
+        for idx, existing_corner in enumerate(unique_corners):
             if are_points_similar(intersection, existing_corner, tolerance):
+                # Comparar distancias al centro
+                dist_new = np.linalg.norm(np.array(intersection) - img_center)
+                dist_existing = np.linalg.norm(np.array(existing_corner) - img_center)
+                if dist_new > dist_existing:
+                    replace_idx = idx
                 is_unique = False
                 break
         if is_unique:
             unique_corners.append(intersection)
+        elif replace_idx is not None:
+            unique_corners[replace_idx] = intersection
     return unique_corners
 
 

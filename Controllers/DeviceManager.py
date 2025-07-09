@@ -76,7 +76,7 @@ class DeviceManager:
                 for i in range(10):
                     line = ser.readline().decode('utf-8').strip()
                     print(f"Line {i+1}: {line}")
-                    if "triggered" in line.lower() or "open" in line.lower():
+                    if "ok" in line.lower():
                         print(1)
                         return "printer"
                     if "e: cnf" in line.lower() or "tof" in line.lower():

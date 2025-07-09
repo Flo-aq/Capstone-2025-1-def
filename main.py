@@ -216,10 +216,10 @@ class Main:
         self.paper = Paper(self.config, self.camera_box, self.translator)
         self.paper.set_position(self.top_left_img, self.bottom_right_img)
         self.paper.calculate_capture_positions()
-        # # if index == 0:
-        # #   start = "TL"
-        # # else:
-        # #   start = "TR"
+        # # # if index == 0:
+        # # #   start = "TL"
+        # # # else:
+        # # #   start = "TR"
         
         for i, pos in enumerate(self.paper.capture_positions):
             print(f"Moving camera to capture position {pos}...")
@@ -234,14 +234,14 @@ class Main:
         print("Creating paper image...")
             
         self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config, stitcher=self.image_stitcher)
-        # print("Creating paper image...")
-        # self.paper.image.create_image()
-        self.paper.get_text()
-        self.paper.translate_text()
-        print("Text captured and translated.")
-        print("Generating braille coordinates...")
-        self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
-        self.braille_converter.sort_coordinates()
+        # # print("Creating paper image...")
+        # # self.paper.image.create_image()
+        # self.paper.get_text()
+        # self.paper.translate_text()
+        # print("Text captured and translated.")
+        # print("Generating braille coordinates...")
+        # self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
+        # self.braille_converter.sort_coordinates()
         # print(self.braille_converter.sorted_coordinates[:10])  # Print first 10 coordinates for debugging
         # success = self.device_manager.arduino_mega_printer.print_braille_points(self.braille_converter.sorted_coordinates[:10])
         # if success:
