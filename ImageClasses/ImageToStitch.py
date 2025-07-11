@@ -20,30 +20,23 @@ class ImageToStitch:
         """
         Crea una máscara que detecta áreas rojas y azules en la imagen.
         """
-        hsv = cv2.cvtColor(self.img, cv2.COLOR_BGR2HSV)
+        img_bright = self.img.copy()
+        hsv_bright = cv2.cvtColor(img_bright, cv2.COLOR_BGR2HSV)
         
-        # Definir rangos para rojo (en HSV el rojo está en los extremos del espectro)
-        lower_red1 = np.array([0, 100, 100])
-        upper_red1 = np.array([10, 255, 255])
-        lower_red2 = np.array([160, 100, 100])
-        upper_red2 = np.array([179, 255, 255])
+        mask_white = hsv_bright[...,2] > 120
+        hsv_bright[...,2][mask_white] = np.clip(hsv_bright[...,2][mask_white] * 1.7, 0, 255)
+        img_bright = cv2.cvtColor(hsv_bright, cv2.COLOR_HSV2BGR)
         
-        # Definir rango para azul
-        lower_blue = np.array([90, 50, 50])
+        hsv = cv2.cvtColor(img_bright, cv2.COLOR_BGR2HSV)
+        hsv = hsv.astype(np.float32)
+        hsv[..., 1] = np.clip(hsv[..., 1] * 1.3, 0, 255)
+        hsv = hsv.astype(np.uint8)
+        
+        lower_blue = np.array([100, 95, 65])
         upper_blue = np.array([130, 255, 255])
         
-        # Crear máscaras individuales
-        mask_red1 = cv2.inRange(hsv, lower_red1, upper_red1)
-        mask_red2 = cv2.inRange(hsv, lower_red2, upper_red2)
-        mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
+        self.mask = cv2.inRange(hsv, lower_blue, upper_blue)
         
-        # Combinar máscaras rojas
-        mask_red = cv2.bitwise_or(mask_red1, mask_red2)
-        
-        # Combinar máscaras rojas y azules
-        self.mask = cv2.bitwise_or(mask_red, mask_blue)
-        
-        # Aplicar operaciones morfológicas para limpiar la máscara
         kernel = np.ones((5,5), np.uint8)
         self.mask = cv2.morphologyEx(self.mask, cv2.MORPH_OPEN, kernel)
         self.mask = cv2.morphologyEx(self.mask, cv2.MORPH_CLOSE, kernel)
@@ -52,58 +45,62 @@ class ImageToStitch:
         self.red_polygons_contours, _ = cv2.findContours(self.mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     def create_paper_mask(self):
-        hsv = cv2.cvtColor(self.img, cv2.COLOR_BGR2HSV)
-        lower_blue = np.array([90, 50, 50])
-        upper_blue = np.array([130, 255, 255])
-        blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
-        
-        # Corregir: usar self.img en lugar de self.image
         img_without_blue = self.img.copy()
-        img_without_blue[blue_mask > 0] = [0, 0, 0] 
+        img_without_blue[self.mask > 0] = [0, 0, 0] 
         
-        lab = cv2.cvtColor(img_without_blue, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        l_clahe = clahe.apply(l)
-        lab_clahe = cv2.merge((l_clahe, a, b))
-        img_normalized = cv2.cvtColor(lab_clahe, cv2.COLOR_LAB2BGR) 
-        
-        self.gray_img = cv2.cvtColor(img_normalized, cv2.COLOR_BGR2GRAY)
+        self.gray_img = cv2.cvtColor(img_without_blue, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(self.gray_img, (151, 151), 0)
         
         _, self.binary = cv2.threshold(blurred, 90, 255, cv2.THRESH_BINARY_INV)
+        self.binary = cv2.bitwise_not(self.binary) 
     
     def create_text_mask(self):
-        binary_text = cv2.adaptiveThreshold(self.gray_img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                           cv2.THRESH_BINARY_INV, blockSize=7, C=4)
+        height, width = self.gray_img.shape
+        scale_factor = 1.0
         
-        kernel_small = np.ones((2,2), np.uint8)
-        # Corregir: agregar operación morfológica faltante
+        if width > 2000 or height > 2000:
+            scale_factor = 0.5
+            small_gray = cv2.resize(self.gray_img, None, fx=scale_factor, fy=scale_factor)
+        else:
+            small_gray = self.gray_img
+        
+        binary_text = cv2.adaptiveThreshold(small_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                          cv2.THRESH_BINARY_INV, blockSize=7, C=4)
+        
+        kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+        kernel_medium = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        
         text_mask = cv2.morphologyEx(binary_text, cv2.MORPH_OPEN, kernel_small)
-        kernel_medium = np.ones((3, 3), np.uint8)
         text_mask = cv2.morphologyEx(text_mask, cv2.MORPH_CLOSE, kernel_medium)
         
-        height, width = self.img.shape[:2]
-        min_size = max(3, int(width * height * 0.000001))
-        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(text_mask, 8, cv2.CV_32S)
+        contours, _ = cv2.findContours(text_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
         filtered_mask = np.zeros_like(text_mask)
         
-        for i in range(1, num_labels):
-            area = stats[i, cv2.CC_STAT_AREA]
-            w_comp = stats[i, cv2.CC_STAT_WIDTH]
-            h_comp = stats[i, cv2.CC_STAT_HEIGHT]
-            aspect_ratio = h_comp / w_comp if w_comp > 0 else 0
-            if (area >= min_size and 0.1 <= aspect_ratio <= 12 and
-                max(w_comp, h_comp) <= min(width, height) / 4):
-                filtered_mask[labels == i] = 255
-
-        # Eliminar componentes en fondo azul
-        background_mask = cv2.bitwise_not(self.binary)
-        filtered_mask = cv2.bitwise_and(filtered_mask, background_mask)
-
-        # Dilatación horizontal leve para unir letras
-        kernel_h = np.ones((1, 2), np.uint8)
-        kernel_v = np.ones((2, 1), np.uint8)
+        min_size = max(3, int(small_gray.shape[0] * small_gray.shape[1] * 0.000001))
+        max_dimension = min(small_gray.shape[0], small_gray.shape[1]) / 4
+        
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area < min_size:
+                continue
+                
+            x, y, w, h = cv2.boundingRect(contour)
+            
+            # Filtros de aspecto ratio y tamaño
+            aspect_ratio = h / w if w > 0 else 0
+            if (0.1 <= aspect_ratio <= 12 and max(w, h) <= max_dimension):
+                cv2.fillPoly(filtered_mask, [contour], 255)
+        
+        if scale_factor != 1.0:
+            filtered_mask = cv2.resize(filtered_mask, (width, height), interpolation=cv2.INTER_NEAREST)
+        
+        filtered_mask = cv2.bitwise_and(filtered_mask, self.binary)
+        
+        kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 1))
+        kernel_v = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 2))
+        
         final_mask = cv2.dilate(filtered_mask, kernel_h, iterations=1)
         final_mask = cv2.dilate(final_mask, kernel_v, iterations=1)
+        
         self.text_mask = final_mask

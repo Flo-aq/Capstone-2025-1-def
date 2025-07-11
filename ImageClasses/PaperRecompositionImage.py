@@ -1,4 +1,6 @@
+from math import e
 import time
+from tracemalloc import start
 from ImageClasses.Image import Image
 import numpy as np
 import cv2
@@ -12,7 +14,7 @@ COLOR_PALETTE = ['#43005c', '#6e0060', '#95005d',
 
 
 class PaperRecompositionImage(Image):
-    def __init__(self, camera_box, images, parameters, stitcher):
+    def __init__(self, camera_box, images, parameters, stitcher, path):
         """
         Initialize PaperRecompositionImage with camera and list of images.
 
@@ -31,7 +33,7 @@ class PaperRecompositionImage(Image):
         self.paper_contour = None
         self.paper_mask = None
         self.corners_dict = None
-        
+        self.path = path
         # Realizar el stitching y obtener todos los valores devueltos
         directory = join("FlowImages", "single_images_to_stitch", "stitching")
         os.makedirs(directory, exist_ok=True)
@@ -40,7 +42,11 @@ class PaperRecompositionImage(Image):
         for i, img in enumerate(self.images):
             output_path = join(directory, f"image_{i}_{timestamp}.jpg")
             cv2.imwrite(output_path, img)
+        start = time.time()
         result = self.image_stitcher.stitch_images(self.images)
+        end = time.time()
+        with open(path, 'a') as f:
+            f.write(f"Stitching time: {end - start:.2f} seconds\n")
     
         # Manejar los valores devueltos
         if isinstance(result, tuple) and len(result) >= 3:
@@ -161,6 +167,7 @@ class PaperRecompositionImage(Image):
         
     def extract_and_rotate(self, corners_dict, img=None, width_mm=210, height_mm=297):
         """Extrae y rectifica la región del papel basada en las esquinas detectadas"""
+        start = time.time()
         # Usar imagen proporcionada o la almacenada
         img_to_process = img if img is not None else self.image
         
@@ -191,6 +198,10 @@ class PaperRecompositionImage(Image):
         matrix = cv2.getPerspectiveTransform(corners, dst_points)
         warped = cv2.warpPerspective(img_to_process, matrix, (dst_width, dst_height))
         os.makedirs("FlowImages/warped_images", exist_ok=True)
+        end = time.time()
+        processing_time = end - start
+        with open(self.path, 'a') as f:
+            f.write(f"Paper extraction time: {processing_time:.2f} seconds\n")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join("FlowImages/warped_images", f"warped_{timestamp}.jpg")
         cv2.imwrite(output_path, warped)

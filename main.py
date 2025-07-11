@@ -1,8 +1,10 @@
 # Imports de la biblioteca estándar
 import os
+from subprocess import STARTF_FORCEONFEEDBACK
 import time
 from datetime import datetime
 from os.path import join
+from tracemalloc import start
 
 import cv2
 
@@ -14,6 +16,7 @@ from Functions.AuxFunctions import load_json
 from GCodeGenerator import GCodeGenerator
 from ImageClasses.CornerImage import CornerImage
 from ImageClasses.ImageStitcher import ImageStitcher
+from ImageClasses.ImageStitcher2 import ImageStitcher2
 from ImageClasses.PaperSectionImage import PaperSectionImage
 from ImageClasses.PaperRecompositionImage import PaperRecompositionImage
 from Paper import Paper
@@ -22,7 +25,7 @@ from Translator import Translator
 
 
 class Main:
-    def __init__(self):
+    def __init__(self, iteration):
         self.device_manager = DeviceManager()
         
         self.config = load_json(join("parameters.json"))
@@ -39,7 +42,7 @@ class Main:
         
         # self.g_code_generator = GCodeGenerator()
         
-        self.image_stitcher = ImageStitcher()
+        self.image_stitcher = ImageStitcher2()
         
         self.top_left_img = None
         self.bottom_right_img = None
@@ -47,6 +50,9 @@ class Main:
         self.paper = None
         
         self.imgs = []
+        
+        self.metrics_path = join("metrics", f"{iteration}", "metrics.txt")
+        os.makedirs(os.path.dirname(self.metrics_path), exist_ok=True)
 
 
     
@@ -215,7 +221,12 @@ class Main:
         
         self.paper = Paper(self.config, self.camera_box, self.translator)
         self.paper.set_position(self.top_left_img, self.bottom_right_img)
+        start_time = time.time()
         self.paper.calculate_capture_positions()
+        end_time = time.time()
+        capture_time = end_time - start_time
+        with open(self.metrics_path, 'a') as f:
+            f.write(f"Paper capture time: {capture_time:.2f} seconds\n")
         # # # if index == 0:
         # # #   start = "TL"
         # # # else:
@@ -232,27 +243,37 @@ class Main:
             self.imgs.append(img)
         
         print("Creating paper image...")
-            
-        self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config, stitcher=self.image_stitcher)
+        self.paper.image = PaperRecompositionImage(camera_box=self.camera_box, images=self.imgs, parameters=self.config, stitcher=self.image_stitcher, path=self.metrics_path)
+        
         # print("Creating paper image...")
         # self.paper.image.create_image()
+        start_time = time.time()
         self.paper.get_text()
+        end_time = time.time()
+        extraction_time = end_time - start_time
+        with open(self.metrics_path, 'a') as f:
+            f.write(f"Text extraction time: {extraction_time:.2f} seconds\n")
+        start_time = time.time()
         self.paper.translate_text()
+        end_time = time.time()
+        translation_time = end_time - start_time
+        with open(self.metrics_path, 'a') as f:
+            f.write(f"Text translation time: {translation_time:.2f} seconds\n")
         print("Text captured and translated.")
         print("Generating braille coordinates...")
         self.braille_converter.binary_to_coordinates(self.paper.translated_text["binary"])
         self.braille_converter.sort_coordinates()
-        print(self.braille_converter.sorted_coordinates[:min(100, len(self.braillesorted_coordinates))])  # Print first 10 coordinates for debugging
-        success = self.device_manager.arduino_mega_printer.print_braille_points(self.braille_converter.sorted_coordinates)
-        if success:
-            print("Braille printing completed successfully!")
-        else:
-            print("E: Braille printing failed")
+        # print(self.braille_converter.sorted_coordinates[:min(100, len(self.braillesorted_coordinates))])  # Print first 10 coordinates for debugging
+        #success = self.device_manager.arduino_mega_printer.print_braille_points(self.braille_converter.sorted_coordinates)
+        #if success:
+        #     print("Braille printing completed successfully!")
+        # else:
+        #     print("E: Braille printing failed")
         
-        return success
+        # return success
 
 if __name__ == "__main__":
     main = Main()
     
-    success = main.flow()
+    main.flow()
     
