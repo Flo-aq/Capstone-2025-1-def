@@ -4,6 +4,8 @@ from xml.sax import handler
 from ImageClasses.ImageToStitch import ImageToStitch
 import numpy as np
 import cv2
+import os
+import matplotlib.pyplot as plt
 
 
 class ImageStitcher2:
@@ -66,6 +68,23 @@ class ImageStitcher2:
             image_handler = ImageToStitch(img)
             image_handler.process()
             handlers.append(image_handler)
+            os.makedirs("debug_imgs", exist_ok=True)
+            plt.figure(figsize=(10,3))
+            plt.subplot(1,3,1)
+            plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            plt.title(f"Imagen {i+1}")
+            plt.axis('off')
+            plt.subplot(1,3,2)
+            plt.imshow(image_handler.text_mask, cmap='gray')
+            plt.title("Máscara texto")
+            plt.axis('off')
+            plt.subplot(1,3,3)
+            plt.imshow(image_handler.binary, cmap='gray')
+            plt.title("Máscara binaria")
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(f"debug_ims/preprocess_{i+1}.png")
+            plt.close()
 
         result_handler = handlers[0]
         for i in range(1, len(handlers)):
