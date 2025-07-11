@@ -43,7 +43,7 @@ class PaperRecompositionImage(Image):
             output_path = join(directory, f"image_{i}_{timestamp}.jpg")
             cv2.imwrite(output_path, img)
         start = time.time()
-        result = self.image_stitcher.stitch_images(self.images)
+        result = self.image_stitcher.stitch_and_extract(self.images)
         end = time.time()
         with open(path, 'a') as f:
             f.write(f"Stitching time: {end - start:.2f} seconds\n")
@@ -61,7 +61,12 @@ class PaperRecompositionImage(Image):
             self.paper_contour, self.paper_mask, img_without_background = self.get_paper_polygon(self.image)
             if self.paper_contour is not None:
                 self.corners_dict = self.get_ordered_corners(self.paper_contour)
-        
+        panoramas_dir = os.path.join("FlowImages", "Panoramas")
+        os.makedirs(panoramas_dir, exist_ok=True)
+        panorama_path = os.path.join(panoramas_dir, f"panorama_{timestamp}.jpg")
+        if self.image is not None:
+            cv2.imwrite(panorama_path, self.image)
+            print(f"Panorama guardada en: {panorama_path}")
     # Añadir las funciones transferidas desde ImageStitcher
     def get_paper_polygon(self, img):
         """Versión simplificada de get_paper_polygon_from_stitched_img para la clase PaperRecompositionImage"""

@@ -1,6 +1,5 @@
 # Imports de la biblioteca estándar
 import os
-from subprocess import STARTF_FORCEONFEEDBACK
 import time
 from datetime import datetime
 from os.path import join
@@ -53,7 +52,8 @@ class Main:
         
         self.metrics_path = join("metrics", f"{iteration}", "metrics.txt")
         os.makedirs(os.path.dirname(self.metrics_path), exist_ok=True)
-
+        with open(self.metrics_path, 'w') as f:
+            f.write(f"Metricas iteración {iteration}\n")
 
     
     def move_axis_arduino(self, axis, distance_mm):
@@ -273,7 +273,7 @@ class Main:
         # return success
 
 if __name__ == "__main__":
-    main = Main()
+    main = Main(1)
     
     main.flow()
     

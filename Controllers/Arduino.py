@@ -111,7 +111,7 @@ class ArduinoMegaScanner(Arduino):
             start_time = time.time()
             response_lines = []
 
-            while (time.time() - start_time) < 600:  # 20 segundos de timeout
+            while (time.time() - start_time) < 60:  # 20 segundos de timeout
                 if self.serial.in_waiting > 0:
                     line = self.serial.readline().decode('utf-8').strip()
                     if line:
