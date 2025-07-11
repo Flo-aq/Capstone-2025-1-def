@@ -1,0 +1,6 @@
+Metricas iteración 1
+Paper capture time: 2.77 seconds
+Stitching time: 16.67 seconds
+Paper extraction time: 0.11 seconds
+Text extraction time: 26.94 seconds
+Text translation time: 0.01 seconds

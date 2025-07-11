@@ -3,6 +3,8 @@ import numpy as np
 
 class ImageToStitch:
     def __init__(self, img):
+        if img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
         self.img = img
         self.mask = None
         self.red_polygons_contours = None
@@ -31,11 +33,18 @@ class ImageToStitch:
         hsv = hsv.astype(np.float32)
         hsv[..., 1] = np.clip(hsv[..., 1] * 1.3, 0, 255)
         hsv = hsv.astype(np.uint8)
-        
+        lower_red1 = np.array([0, 100, 100])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([160, 100, 100])
+        upper_red2 = np.array([180, 255, 255])
         lower_blue = np.array([100, 95, 65])
         upper_blue = np.array([130, 255, 255])
         
-        self.mask = cv2.inRange(hsv, lower_blue, upper_blue)
+        blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
+        red_mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+        red_mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+        red_mask = cv2.bitwise_or(red_mask1, red_mask2)
+        self.mask = cv2.bitwise_and(red_mask, cv2.bitwise_not(blue_mask))
         
         kernel = np.ones((5,5), np.uint8)
         self.mask = cv2.morphologyEx(self.mask, cv2.MORPH_OPEN, kernel)
@@ -46,6 +55,7 @@ class ImageToStitch:
     
     def create_paper_mask(self):
         img_without_blue = self.img.copy()
+        print(self.img.shape, self.mask.shape)
         img_without_blue[self.mask > 0] = [0, 0, 0] 
         
         self.gray_img = cv2.cvtColor(img_without_blue, cv2.COLOR_BGR2GRAY)

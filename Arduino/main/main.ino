@@ -63,7 +63,7 @@ const unsigned long resetCooldown = 1000;
 const int PRECISION_THRESHOLD_ON = 15;  // Umbral para activar alta precisión
 const int PRECISION_THRESHOLD_OFF = 25; // Umbral para desactivar (más grande)
 ////////////////////////////////////////////////////////////////
-const float ORIGIN_OFFSET_X = 48;  // Ajusta según la posición real del origen
+const float ORIGIN_OFFSET_X = 43;  // Ajusta según la posición real del origen
 const float ORIGIN_OFFSET_Y = 105; // Ajusta según la posición real del origen
 ////////////////////////////////////////////////////////////////
 float kp = 0.2;
@@ -247,7 +247,7 @@ void processCommand(String command)
     float a = moveMM(STEP_X, DIR_X, ORIGIN_OFFSET_X, true, 0);
     float b = moveMM(STEP_Y, DIR_Y, ORIGIN_OFFSET_Y, false, 0);
 
-    MAX_POS_X = 245 - ORIGIN_OFFSET_X;
+    MAX_POS_X = 240 - ORIGIN_OFFSET_X;
     MAX_POS_Y = 174 - ORIGIN_OFFSET_Y;
 
     current_pos_x = 0.0;
@@ -664,7 +664,6 @@ bool initializeTofSensorX(unsigned long timingBudget = FAST_TOF_SPEED)
 
   if (!sensorXOk)
   {
-    Serial.println("E: TOF X");
     return false;
   }
 
@@ -702,7 +701,6 @@ bool initializeTofSensorY(unsigned long timingBudget = FAST_TOF_SPEED)
 
   if (!sensorYOk)
   {
-    Serial.println("E: TOF Y");
     return false;
   }
 
