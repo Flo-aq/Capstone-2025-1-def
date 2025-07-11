@@ -202,7 +202,6 @@ class ArduinoMegaScanner(Arduino):
         return self.send_command(command)
 
     def move_with_PID(self, axis, distance):
-        distance = int(distance)
         if axis.upper() not in ["X", "Y"]:
             return "E: Invalid axis"
 
