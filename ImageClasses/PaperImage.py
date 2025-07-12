@@ -39,6 +39,8 @@ class PaperImage():
         pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
         osd = pytesseract.image_to_osd(self.image, output_type=pytesseract.Output.DICT)
         rotation = osd["rotate"]
+        print(osd)
+        print(f"Rotation detected: {rotation} degrees")
         return rotation == 180
     
     def process(self):

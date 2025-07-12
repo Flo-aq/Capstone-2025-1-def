@@ -50,7 +50,7 @@ class PaperRecompositionImage(Image):
     
         # Manejar los valores devueltos
         if isinstance(result, tuple) and len(result) >= 3:
-            self.image, self.paper_contour, self.paper_mask = result
+            self.image, self.paper_contour, self.paper_mask, self.text_mask = result
             # Si hay contorno, calcular las esquinas ordenadas
             if self.paper_contour is not None:
                 self.corners_dict = self.get_ordered_corners(self.paper_contour)
@@ -175,33 +175,87 @@ class PaperRecompositionImage(Image):
         start = time.time()
         # Usar imagen proporcionada o la almacenada
         img_to_process = img if img is not None else self.image
-        
+                
         if img_to_process is None:
             raise ValueError("No image to process")
         if None in corners_dict.values():
             raise ValueError("Corner positions cannot be None")
-        
+                
         corners = np.float32([
             corners_dict['top_left'],
             corners_dict['top_right'],
             corners_dict['bottom_right'],
             corners_dict['bottom_left']
         ])
+                
+        # Calcular las distancias de los lados del polígono detectado
+        top_side = np.linalg.norm(corners[1] - corners[0])  # top_right - top_left
+        right_side = np.linalg.norm(corners[2] - corners[1])  # bottom_right - top_right
+        bottom_side = np.linalg.norm(corners[3] - corners[2])  # bottom_left - bottom_right
+        left_side = np.linalg.norm(corners[0] - corners[3])  # top_left - bottom_left
         
-        # Calcular dimensiones de destino
-        dst_width = int(width_mm / self.camera_box.camera.mm_per_px_h)
-        dst_height = int(height_mm / self.camera_box.camera.mm_per_px_v)
+        # Calcular dimensiones promedio
+        detected_width = (top_side + bottom_side) / 2
+        detected_height = (left_side + right_side) / 2
         
+        # Determinar si necesitamos rotar para que el lado más largo quede vertical
+        if detected_width > detected_height:
+            # El papel está en landscape, necesitamos rotarlo
+            # Reordenar esquinas para rotar 90° (sentido horario)
+            corners_rotated = np.float32([
+                corners_dict['bottom_left'],   # nuevo top_left
+                corners_dict['top_left'],      # nuevo top_right
+                corners_dict['top_right'],     # nuevo bottom_right
+                corners_dict['bottom_right']   # nuevo bottom_left
+            ])
+            corners = corners_rotated
+            
+            # Después de rotar: detected_width se convierte en height, detected_height en width
+            dst_width = int(detected_height)   # lado corto
+            dst_height = int(detected_width)   # lado largo
+        else:
+            # El papel ya está en portrait
+            dst_width = int(detected_width)    # lado corto
+            dst_height = int(detected_height)  # lado largo
+                
         dst_points = np.float32([
             [0, 0],
             [dst_width, 0],
             [dst_width, dst_height],
             [0, dst_height]
         ])
-        
+                
         # Aplicar transformación de perspectiva
         matrix = cv2.getPerspectiveTransform(corners, dst_points)
         warped = cv2.warpPerspective(img_to_process, matrix, (dst_width, dst_height))
+        gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        background = cv2.GaussianBlur(gray, (21, 21), 0)
+        normalized = cv2.divide(gray, background, scale=255)
+        img_bin = cv2.adaptiveThreshold(
+            normalized, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 15, 10
+        )
+
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(img_bin, connectivity=8)
+        mask = np.zeros_like(img_bin)
+
+        for i in range(1, num_labels):
+            area = stats[i, cv2.CC_STAT_AREA]
+            x, y, w, h = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP], stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
+            if area > 10:
+                mask[labels == i] = 255
+            else:
+                x_start = max(0, x - 10)
+                y_start = max(0, y - 10)
+                x_end = min(img_bin.shape[1], x + w + 10)
+                y_end = min(img_bin.shape[0], y + h + 10)
+                if np.any(mask[y_start:y_end, x_start:x_end]):
+                    mask[labels == i] = 255
+
+        cleaned = mask
+        
+        
+        # 4. remove_isolated_noise_components sobre el crop
         os.makedirs("FlowImages/warped_images", exist_ok=True)
         end = time.time()
         processing_time = end - start
@@ -209,9 +263,9 @@ class PaperRecompositionImage(Image):
             f.write(f"Paper extraction time: {processing_time:.2f} seconds\n")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = os.path.join("FlowImages/warped_images", f"warped_{timestamp}.jpg")
-        cv2.imwrite(output_path, warped)
+        cv2.imwrite(output_path, cleaned)
         print(f"Warped image saved to: {output_path}")
-        return warped
+        return cleaned
         
     def save_debug_visualization(self, img, contour=None, corners_dict=None, output_dir="debug_imgs"):
         """Guarda imágenes de visualización para debugging"""

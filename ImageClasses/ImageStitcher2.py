@@ -23,12 +23,12 @@ class ImageStitcher2:
 
     def stitch_and_extract(self, images):
         if not images:
-            return None, None, None
+            return None, None, None, None
 
         final_image, result_handler = self.stitch_images(images)
 
         if final_image is None or result_handler is None:
-            return None, None, None
+            return None, None, None, None
 
         contour_hoja = None
         if result_handler.binary is not None:
@@ -50,7 +50,7 @@ class ImageStitcher2:
 
         # Extraer la paper mask
         paper_mask = result_handler.binary
-        return final_image, contour_hoja, paper_mask
+        return final_image, contour_hoja, paper_mask, result_handler.text_mask
 
     def stitch_images(self, images):
         if not images:
@@ -83,7 +83,7 @@ class ImageStitcher2:
             plt.title("Máscara binaria")
             plt.axis('off')
             plt.tight_layout()
-            plt.savefig(f"debug_ims/preprocess_{i+1}.png")
+            plt.savefig(f"debug_imgs/preprocess_{i+1}.png")
             plt.close()
 
         result_handler = handlers[0]
@@ -142,74 +142,92 @@ class ImageStitcher2:
                 mask1_small, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             contours2, _ = cv2.findContours(
                 mask2_small, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if has_text1 and has_text2:
-                similar_pairs = self.find_similar_contours(
-                    contours1, contours2)
-                top_contours_mask1 = np.zeros_like(mask1_small)
-                top_contours_mask2 = np.zeros_like(mask2_small)
-
-                top_pairs = similar_pairs[:min(15, len(similar_pairs))]
-
-                for pair in top_pairs:
-                    idx1, idx2 = pair[0], pair[1]
-                    cv2.drawContours(top_contours_mask1, [
-                                     contours1[idx1]], -1, 255, -1)
-                    cv2.drawContours(top_contours_mask2, [
-                                     contours2[idx2]], -1, 255, -1)
-                combined_mask1 = cv2.bitwise_or(top_contours_mask1, text_mask1)
-                combined_mask2 = cv2.bitwise_or(top_contours_mask2, text_mask2)
-
-                orb = cv2.ORB_create(
-                    nfeatures=9000,
-                    scaleFactor=1.05,
-                    nlevels=12,
-                    edgeThreshold=10,
-                    patchSize=51,
-                    fastThreshold=8,
-                    WTA_K=3,
-                    scoreType=cv2.ORB_HARRIS_SCORE,
-                    firstLevel=0
-                )
-                
-            else:
-              similar_pairs = self.find_similar_contours(
-                  contours1, contours2
-              )
-              
-              top_contours_mask1 = np.zeros_like(mask1_small)
-              top_contours_mask2 = np.zeros_like(mask2_small)
-              top_pairs = similar_pairs[:min(15, len(similar_pairs))]
-              
-              for pair in top_pairs:
-                  idx1, idx2 = pair[0], pair[1]
-                  cv2.drawContours(top_contours_mask1, [contours1[idx1]], -1, 255, -1)
-                  cv2.drawContours(top_contours_mask2, [contours2[idx2]], -1, 255, -1)
-                  
-              combined_mask1 = top_contours_mask1
-              combined_mask2 = top_contours_mask2
-              
-              orb = cv2.ORB_create(
-                  nfeatures=4000,
-                  scaleFactor=1.2,
-                  nlevels=8,
-                  edgeThreshold=31,
-                  patchSize=51,
-                  fastThreshold=20,
-                  WTA_K=3,
+            similar_pairs = self.find_similar_contours(
+                contours1, contours2
+            )
+            
+            top_contours_mask1 = np.zeros_like(mask1_small)
+            top_contours_mask2 = np.zeros_like(mask2_small)
+            top_pairs = similar_pairs[:min(15, len(similar_pairs))]
+            
+            for pair in top_pairs:
+                idx1, idx2 = pair[0], pair[1]
+                cv2.drawContours(top_contours_mask1, [contours1[idx1]], -1, 255, -1)
+                cv2.drawContours(top_contours_mask2, [contours2[idx2]], -1, 255, -1)
+            orb_contours = cv2.ORB_create(
+                  nfeatures=9000,        # Menos características para contornos
+                  scaleFactor=1.3,       # Mayor escala para captar contornos completos
+                  nlevels=10,             # Menos niveles para formas más grandes
+                  edgeThreshold=31,      # Mayor umbral para formas más completas
+                  patchSize=131,          # Patches más grandes para contornos
+                  fastThreshold=25,      # Mayor umbral para detectar esquinas más definidas
+                  WTA_K=4,               # Aumentado para mayor discriminación
                   scoreType=cv2.ORB_HARRIS_SCORE,
                   firstLevel=0
               )
-
-            kp1, desc1 = orb.detectAndCompute(img1_small, combined_mask1)
-            kp2, desc2 = orb.detectAndCompute(img2_small, combined_mask2)
-            if desc1 is None or desc2 is None:
-                print("No descriptors found in one of the images.")
-                continue
-            bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-            matches = bf.knnMatch(desc1, desc2, k=2)
-            img1_kp = cv2.drawKeypoints(img1_small, kp1, None, color=(0,255,0), flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-            img2_kp = cv2.drawKeypoints(img2_small, kp2, None, color=(0,255,0), flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+            kp1_contours, desc1_contours = orb_contours.detectAndCompute(img1_small, top_contours_mask1)
+            kp2_contours, desc2_contours = orb_contours.detectAndCompute(img2_small, top_contours_mask2)
             
+            all_kp1 = []
+            all_desc1 = []
+            all_kp2 = []
+            all_desc2 = []
+            
+        
+            all_kp1.extend(kp1_contours)
+            all_desc1.append(desc1_contours)
+            all_kp2.extend(kp2_contours)
+            all_desc2.append(desc2_contours)
+            if has_text1 and has_text2:
+                orb_text = cv2.ORB_create(
+                  nfeatures=9000,
+                  scaleFactor=1.05,
+                  nlevels=15,
+                  edgeThreshold=10,
+                  patchSize=51,
+                  fastThreshold=11,
+                  WTA_K=3,
+                  scoreType=cv2.ORB_HARRIS_SCORE,
+                  firstLevel=0
+                )
+                kp1_text, desc1_text = orb_text.detectAndCompute(img1_small, text_mask1)
+                kp2_text, desc2_text = orb_text.detectAndCompute(img2_small, text_mask2)
+                all_kp1.extend(kp1_text)
+                all_desc1.append(desc1_text)
+                all_kp2.extend(kp2_text)
+                all_desc2.append(desc2_text)
+            if len(all_desc1) == 0 or len(all_desc2) == 0 or len(all_kp1) < self.min_matches or len(all_kp2) < self.min_matches:
+                print("No se pudieron extraer suficientes descriptores")
+                return None, None
+            else:
+                desc1_combined = np.vstack(all_desc1)
+                desc2_combined = np.vstack(all_desc2)
+                kp1_combined = all_kp1
+                kp2_combined = all_kp2
+            if has_text1 and has_text2:
+                combined_mask1 = cv2.bitwise_or(top_contours_mask1, text_mask1)
+                combined_mask2 = cv2.bitwise_or(top_contours_mask2, text_mask2)
+            else:
+                combined_mask1 = top_contours_mask1
+                combined_mask2 = top_contours_mask2
+                
+            plt.figure(figsize=(8,3))
+            plt.subplot(1,2,1)
+            plt.imshow(combined_mask1, cmap='gray')
+            plt.title(f"Máscara combinada 1 (iter {i})")
+            plt.axis('off')
+            plt.subplot(1,2,2)
+            plt.imshow(combined_mask2, cmap='gray')
+            plt.title(f"Máscara combinada 2 (iter {i})")
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(f"debug_imgs/mascara_combinada_{i}.png")
+            plt.close()
+            
+            bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+            matches = bf.knnMatch(desc1_combined, desc2_combined, k=2)
+            img1_kp = cv2.drawKeypoints(img1_small, all_kp1, None, color=(0,255,0), flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+            img2_kp = cv2.drawKeypoints(img2_small, all_kp2, None, color=(0,255,0), flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
             good_matches = []
             for match_pair in matches:
                 if len(match_pair) == 2:
@@ -219,14 +237,36 @@ class ImageStitcher2:
           
             if len(good_matches) < self.min_matches:
                 print(f"Not enough matches: {len(good_matches)}/{self.min_matches}")
-                return None, None, None
-            img_matches = cv2.drawMatches(
-                img1_small, kp1, img2_small, kp2, good_matches, None,
-                flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+                return None, None
+            plt.figure(figsize=(12,5))
+            plt.subplot(1,2,1)
+            plt.imshow(img1_kp)
+            plt.title(f"Keypoints ORB img1 (iter {i})")
+            plt.axis('off')
+            plt.subplot(1,2,2)
+            plt.imshow(img2_kp)
+            plt.title(f"Keypoints ORB img2 (iter {i})")
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(f"debug_imgs/keypoints_{i}.png")
+            plt.close()
 
-            src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-            dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+            # ...existing code...
+            img_matches = cv2.drawMatches(
+                img1_small, all_kp1, img2_small, all_kp2, good_matches, None,
+                flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+            plt.figure(figsize=(12,6))
+            plt.imshow(img_matches)
+            plt.title(f"Matches ORB (iter {i})")
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(f"debug_imgs/matches_{i}.png")
+            plt.close()
             
+            
+
+            src_pts = np.float32([all_kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+            dst_pts = np.float32([all_kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
             H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
             
             if H is None:
@@ -287,7 +327,7 @@ class ImageStitcher2:
                 y_start < 0 or x_start < 0 or
                 y_end > height or x_end > width):
                 print("Error en los límites de recorte")
-                return None, None, None
+                return None, None
                 
             panorama_region = panorama[y_start:y_end, x_start:x_end]
             img2_region = img2[img2_y_start:img2_y_end, img2_x_start:img2_x_end]
@@ -308,8 +348,22 @@ class ImageStitcher2:
                 'y_min': y_min
             }
             panorama_rgb = cv2.cvtColor(panorama, cv2.COLOR_BGR2RGB)
+            plt.figure(figsize=(10,6))
+            plt.imshow(panorama_rgb)
+            plt.title(f"Panorama iteración {i}")
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(f"debug_imgs/panorama_{i}.png")
+            plt.close()
             result_handler = ImageToStitch(panorama)
             self.transform_and_combine_masks(result_handler, handler1, handler2, H_adjusted, panorama_bounds)
+        plt.figure(figsize=(12,8))
+        plt.imshow(cv2.cvtColor(result_handler.img, cv2.COLOR_BGR2RGB))
+        plt.title("Panorama final")
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig("debug_imgs/panorama_final.png")
+        plt.close()
         return result_handler.img, result_handler    
 
     def transform_and_combine_masks(self, result_handler, handler1, handler2, H_adjusted, panorama_bounds):
@@ -317,7 +371,25 @@ class ImageStitcher2:
         height = panorama_bounds['height']
         x_min = panorama_bounds['x_min']
         y_min = panorama_bounds['y_min']
-        
+        fig, axs = plt.subplots(2, 3, figsize=(12, 8))
+        axs[0, 0].imshow(handler1.mask, cmap='gray')
+        axs[0, 0].set_title("handler1.mask")
+        axs[0, 1].imshow(handler1.text_mask, cmap='gray')
+        axs[0, 1].set_title("handler1.text_mask")
+        axs[0, 2].imshow(handler1.binary, cmap='gray')
+        axs[0, 2].set_title("handler1.binary")
+        axs[1, 0].imshow(handler2.mask, cmap='gray')
+        axs[1, 0].set_title("handler2.mask")
+        axs[1, 1].imshow(handler2.text_mask, cmap='gray')
+        axs[1, 1].set_title("handler2.text_mask")
+        axs[1, 2].imshow(handler2.binary, cmap='gray')
+        axs[1, 2].set_title("handler2.binary")
+        for ax in axs.flat:
+            ax.axis('off')
+        plt.suptitle("Máscaras antes de combinar")
+        plt.tight_layout()
+        plt.savefig("debug_imgs/mascaras_antes_combinar.png")
+        plt.close()
         combined_mask = np.zeros((height, width), dtype=np.uint8)
         combined_text_mask = np.zeros((height, width), dtype=np.uint8)
         combined_binary = np.zeros((height, width), dtype=np.uint8)
@@ -361,7 +433,19 @@ class ImageStitcher2:
             if handler2.binary is not None:
                 binary2_region = handler2.binary[img2_y_start:img2_y_end, img2_x_start:img2_x_end]
                 combined_binary[y_start:y_end, x_start:x_end] = binary2_region
-        
+        fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+        axs[0].imshow(combined_mask, cmap='gray')
+        axs[0].set_title("Máscara combinada")
+        axs[1].imshow(combined_text_mask, cmap='gray')
+        axs[1].set_title("Máscara texto combinada")
+        axs[2].imshow(combined_binary, cmap='gray')
+        axs[2].set_title("Máscara binaria combinada")
+        for ax in axs.flat:
+            ax.axis('off')
+        plt.suptitle("Máscaras después de combinar")
+        plt.tight_layout()
+        plt.savefig("debug_imgs/mascaras_despues_combinar.png")
+        plt.close()
         result_handler.mask = combined_mask
         result_handler.text_mask = combined_text_mask
         result_handler.binary = combined_binary
