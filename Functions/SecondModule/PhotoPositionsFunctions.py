@@ -163,9 +163,11 @@ def get_candidates_from_grid(grid, polygon_geom, covered_regions, min_overlap, m
     return candidates[:max_candidates]
 
 def calculate_photo_positions_with_tree(polygon, fov_width, fov_height, composite_img_height, composite_img_width, min_overlap, max_candidates, max_depth):
-    step = int(fov_width / 15)
+    print(1)
+    step = int(fov_width / 25)
     polygon_coords = [(float(point[0]), float(point[1])) for point in polygon]
     polygon_geom = Polygon(polygon_coords).buffer(0)
+    print(polygon_geom)
     
     grid, x_positions, y_positions = create_initial_grid(polygon_geom, fov_width, fov_height, composite_img_width, composite_img_height, step)
     
@@ -186,17 +188,17 @@ def calculate_photo_positions_with_tree(polygon, fov_width, fov_height, composit
         'grid_state': grid.copy()
       }
     ]
-    
     all_branches = []
     while tree:
+        
         current_branch = tree.pop(0)
         positions = current_branch['positions']
         regions = current_branch['regions']
         depth = current_branch['depth']
         grid_state = current_branch['grid_state']
-        
         if depth >= max_depth:
-            return all_branches, max_depth
+            print(f"Max depth reached: {depth} with positions: {positions}")
+            return [positions]
                 
         candidates = get_candidates_from_grid(grid_state, polygon_geom, regions, min_overlap, max_candidates)
         
@@ -209,7 +211,7 @@ def calculate_photo_positions_with_tree(polygon, fov_width, fov_height, composit
             update_grid_distances_and_availability(new_grid, new_regions, step, exclusion_ranges=[exclusion_range])
             
             coverage = verify_complete_coverage(polygon_geom, new_regions)
-            if coverage >= 0.998:
+            if coverage >= 0.995:
                 max_depth_reached = depth + 1
                 print(f"Coverage achieved at depth {max_depth_reached} with positions: {new_positions}")
                 return [new_positions]
@@ -220,4 +222,3 @@ def calculate_photo_positions_with_tree(polygon, fov_width, fov_height, composit
                 'depth': depth + 1,
                 'grid_state': new_grid
             })
-            

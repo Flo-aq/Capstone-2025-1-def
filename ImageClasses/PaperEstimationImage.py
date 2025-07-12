@@ -198,6 +198,24 @@ class PaperEstimationImage(Image):
             return standardize_polygon(polygon)
         
         elif self.case == 3:
+            debug_dir = "FlowImages/PaperEstimationImages"
+            os.makedirs(debug_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            debug_filename = join(debug_dir, f"debug_case3_{timestamp}.txt")
+            with open(debug_filename, "w") as f:
+                f.write("unique_corners:\n")
+                f.write(str(self.unique_corners) + "\n\n")
+                f.write("grouped_lines:\n")
+                f.write(str(self.grouped_lines) + "\n\n")
+                f.write("bottom_image.lines:\n")
+                f.write(str(self.bottom_image.lines) + "\n\n")
+                f.write("top_image.lines:\n")
+                f.write(str(self.top_image.lines) + "\n\n")
+                # Si tienes original_bottom_lines disponible, guárdalo también
+                if hasattr(self.bottom_image, "original_lines"):
+                    f.write("original_bottom_lines:\n")
+                    f.write(str(self.bottom_image.original_lines) + "\n\n")
+
             polygon = find_polygon_from_two_clean_intersections(self.unique_corners, self.top_image.lines_by_angles, self.bottom_image.lines_by_angles, width_px, height_px)
             return standardize_polygon(polygon)
 
@@ -263,12 +281,16 @@ class PaperEstimationImage(Image):
         mm_to_px_h = self.camera.mm_per_px_v
         mm_to_px_v = self.camera.mm_per_px_h
         print("Calculating camera positions for polygon coverage")
-        coverage_positions = calculate_photo_positions_with_tree(self.polygon, fov_width, fov_height, self.height_px, self.width_px, 0.15, 3, 15)
+        print(self.polygon)
+        print(f"FOV width in pixels: {fov_width}, FOV height in pixels: {fov_height}")
+        print(f"mm to px horizontal: {mm_to_px_h}, mm to px vertical: {mm_to_px_v}")
+        print(f"Image height in pixels: {self.height_px}, Image width in pixels: {self.width_px}")
+        coverage_positions = calculate_photo_positions_with_tree(self.polygon, fov_width, fov_height, self.height_px, self.width_px, 0.1, 3, 6)
         if len(coverage_positions) == 0:
             print("No camera positions found for polygon coverage")
             return []
         else:
-          self.visualize_coverage_strategies()
+          self.visualize_coverage_strategies(coverage_positions)
           return self.convert_positions_to_mm(coverage_positions[0])
         # print("Trying first diagonal strategy to get camera positions")
         # positions1, coverage1 = calculate_photo_positions_diagonal_with_overlap(
@@ -421,7 +443,7 @@ class PaperEstimationImage(Image):
 
     
 
-    def visualize_coverage_strategies(self):
+    def visualize_coverage_strategies(self, positions):
         """
         Visualiza la cobertura acumulada paso a paso, mostrando en cada subplot
         el polígono y la suma de las áreas cubiertas por las imágenes capturadas hasta ese punto.
@@ -441,7 +463,6 @@ class PaperEstimationImage(Image):
         fov_width = self.camera.fov_v_px
         fov_height = self.camera.fov_h_px
         
-        positions = calculate_photo_positions_with_tree(self.polygon, fov_width, fov_height, self.height_px, self.width_px, 0.15, 3, 15)[0]
         
         # Convertir polígono al formato esperado
         polygon_points = self.polygon.reshape(-1, 2).tolist()
@@ -451,7 +472,7 @@ class PaperEstimationImage(Image):
         # Llamar a la nueva implementación
         self.visualize_capture_plan_progression(
             polygon_points,
-            positions,
+            positions[0],
             composite_img_size,
             fov_size,
             filename

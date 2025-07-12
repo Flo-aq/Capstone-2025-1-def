@@ -1,35 +1,39 @@
 import numpy as np
 import cv2
-
-
-def group_lines_by_angle(lines, angle_tolerance=5):
+def group_lines_by_angle(lines, angle_tolerance=10):
     """
     Group lines by their angles within a tolerance.
-
+    
     Args:
         lines (list): List of line segments
         angle_tolerance (float): Maximum angle difference for grouping
-
+    
     Returns:
         dict: Groups of lines keyed by their base angle
     """
-    angles = [(calculate_angle(line[0], line[1]), line) for line in lines]
+    angles = [(min(calculate_angle(line[0], line[1]), calculate_angle(line[1], line[0])), line) for line in lines]
     angles.sort(key=lambda x: x[0])
-
+    
     line_groups = {}
-
+    
     for angle, line in angles:
         matched = False
         for base_angle in line_groups:
-            if abs(angle - base_angle) < angle_tolerance:
+            # Calcular diferencia considerando la discontinuidad en 0/180
+            diff = abs(angle - base_angle)
+            # También verificar la diferencia "circular" (ej: 177° vs 3°)
+            circular_diff = min(diff, 180 - diff)
+            
+            if circular_diff < angle_tolerance:
                 line_groups[base_angle].append(line)
                 matched = True
                 break
-
+        
         if not matched:
             line_groups[angle] = [line]
-
+    
     return line_groups
+
 
 
 def calculate_angle(p1, p2):
