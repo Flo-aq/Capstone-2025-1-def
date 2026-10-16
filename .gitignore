@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+FlowImages/
+debug_imgs/
+metrics/
+mask_debug.png
+*.egg-info/
+.venv/
