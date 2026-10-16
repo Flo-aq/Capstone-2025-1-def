@@ -4,6 +4,10 @@ Sistema que **escanea una hoja de texto impreso, lo reconoce con OCR y lo emboza
 
 Proyecto del curso Capstone (Pontificia Universidad Católica de Chile), junio–julio 2025.
 
+## Mi rol
+
+Identifiqué el problema, planteé la solución y desarrollé todo el software: procesamiento de imágenes, OCR y reconstrucción de la hoja con un algoritmo propio; coordenadas y movimiento con programación de hardware (motores y sensores); y traducción de texto a Braille y a G-code. También apoyé el diseño de piezas en Fusion (soportes para sensores y fines de carrera).
+
 ## Cómo funciona
 
 1. **Homing y calibración**: un Arduino Mega mueve el carro XY (motores paso a paso, finales de carrera, sensores de distancia VL53L0X) y se establece el sistema de referencia en mm.
